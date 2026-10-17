@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tiny hook relay started by Claude Code / Codex on every hook event.
+    Targets .NET Framework 4.8 (built into Windows 10/11) so it starts in a few ms and weighs a few KB.
+    The main app embeds this exe and extracts it to %LOCALAPPDATA%\VibeDoze\bin.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>VibeDoze.Hook</AssemblyName>
+    <RootNamespace>VibeDoze.Hook</RootNamespace>
+    <ApplicationIcon>..\VibeDoze\Assets\VibeDoze.ico</ApplicationIcon>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateSupportedRuntime>true</GenerateSupportedRuntime>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Core" />
+  </ItemGroup>
+
+</Project>

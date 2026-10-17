@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>VibeDoze</RootNamespace>
+    <AssemblyName>VibeDoze</AssemblyName>
+    <ApplicationIcon>Assets\VibeDoze.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>VibeDoze.Program</StartupObject>
+    <Version>1.0.0</Version>
+    <Product>VibeDoze</Product>
+    <Description>Mantiene tu laptop despierta mientras Claude Code o Codex trabajan.</Description>
+    <Copyright>© 2026 VibeDoze</Copyright>
+    <!-- Application.ThemeMode (Fluent) is still flagged experimental in WPF -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <SatelliteResourceLanguages>en;es</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <!-- Ship one self-contained exe: no .NET install needed, and the hook helper mode always starts. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Uncompressed: ~65 MB RAM instead of ~145 MB (the bundle is memory-mapped instead of inflated). -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPF and WinForms both define Application, MessageBox, Color... keep them explicit. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Custom Main in Program.cs (hook / watchdog modes run without starting WPF). -->
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\VibeDoze.ico" />
+  </ItemGroup>
+
+  <!-- The tiny hook relay (net48) is built first and embedded; the app extracts it at runtime. -->
+  <PropertyGroup>
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <HookRelayExe>$(MSBuildThisFileDirectory)..\VibeDoze.Hook\bin\$(Configuration)\net48\VibeDoze.Hook.exe</HookRelayExe>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VibeDoze.Hook\VibeDoze.Hook.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      SetTargetFramework="TargetFramework=net48"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishReadyToRun;EnableCompressionInSingleFile;PublishDir" />
+  </ItemGroup>
+  <Target Name="EmbedHookRelay" AfterTargets="ResolveProjectReferences" BeforeTargets="PrepareResources">
+    <ItemGroup>
+      <EmbeddedResource Include="$(HookRelayExe)" LogicalName="VibeDoze.Hook.exe" Condition="Exists('$(HookRelayExe)')" />
+    </ItemGroup>
+    <Warning Text="VibeDoze.Hook.exe no se encontró; los hooks usarán VibeDoze.exe (más lento)." Condition="!Exists('$(HookRelayExe)')" />
+  </Target>
+
+</Project>

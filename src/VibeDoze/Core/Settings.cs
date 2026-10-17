@@ -1,0 +1,122 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace VibeDoze.Core;
+
+public enum SystemAction
+{
+    Sleep,
+    Hibernate,
+    Shutdown,
+}
+
+public sealed class AppSettings
+{
+    // ── General ──
+    public bool Enabled { get; set; } = true;
+    public bool ShowNotifications { get; set; } = true;
+
+    // ── Agents ──
+    public bool WatchClaude { get; set; } = true;
+    public bool WatchCodex { get; set; } = true;
+    public bool WatchOthers { get; set; } = false;
+    /// <summary>Comma separated: exe names (opencode) or command-line fragments for node/bun/python agents (@google/gemini-cli).</summary>
+    public string OtherAgents { get; set; } = "opencode, aider, @google/gemini-cli, @github/copilot";
+
+    // ── Lid ──
+    public bool KeepRunningWithLidClosed { get; set; } = true;
+    public SystemAction LidClosedDoneAction { get; set; } = SystemAction.Sleep;
+    public bool KeepDisplayOn { get; set; } = false;
+    /// <summary>Minutes to keep the laptop awake after the agent finished (time to read the result).</summary>
+    public int FinishGraceMinutes { get; set; } = 2;
+
+    // ── Timer ──
+    public SystemAction TimerAction { get; set; } = SystemAction.Sleep;
+    public int CustomTimerMinutes { get; set; } = 90;
+
+    // ── Protection ──
+    public bool ThermalGuard { get; set; } = true;
+    public int ThermalThresholdC { get; set; } = 80;
+    public int ThermalSustainSeconds { get; set; } = 60;
+    public SystemAction ThermalAction { get; set; } = SystemAction.Sleep;
+    /// <summary>Plugged in (charging, gaming…) running hot is normal: only guard while on battery.</summary>
+    public bool ThermalOnlyOnBattery { get; set; } = true;
+    public bool BatteryGuard { get; set; } = true;
+    public int BatteryMinPercent { get; set; } = 10;
+
+    // ── Advanced (only editable in settings.json) ──
+    /// <summary>CPU (% of one core) of an agent's process tree that counts as "working".</summary>
+    public double CpuActiveThresholdPercent { get; set; } = 1.5;
+    /// <summary>Minimum grace for agents detected only by CPU (no hooks): long model "thinking" uses no CPU.</summary>
+    public int CpuOnlyMinGraceMinutes { get; set; } = 5;
+    /// <summary>A hook-reported "working" turn without any hook/CPU sign of life for this long is considered over (interrupted / crashed).</summary>
+    public int HookStaleMinutes { get; set; } = 10;
+
+    // ── Bookkeeping ──
+    /// <summary>A hook event was received at least once (Codex requires approving new hooks in /hooks).</summary>
+    public bool ClaudeHooksVerified { get; set; }
+    public bool CodexHooksVerified { get; set; }
+    public bool FirstRunDone { get; set; }
+}
+
+internal static class SettingsStore
+{
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    public static AppSettings Load()
+    {
+        try
+        {
+            if (File.Exists(AppPaths.SettingsFile))
+            {
+                var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(AppPaths.SettingsFile), JsonOptions);
+                if (loaded is not null) return Sanitize(loaded);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("No se pudo leer settings.json, usando valores por defecto", ex);
+        }
+        return new AppSettings();
+    }
+
+    public static void Save(AppSettings settings)
+    {
+        try
+        {
+            AtomicWrite(AppPaths.SettingsFile, JsonSerializer.Serialize(settings, JsonOptions));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("No se pudo guardar settings.json", ex);
+        }
+    }
+
+    private static AppSettings Sanitize(AppSettings s)
+    {
+        s.FinishGraceMinutes = Math.Clamp(s.FinishGraceMinutes, 0, 60);
+        s.ThermalThresholdC = Math.Clamp(s.ThermalThresholdC, 50, 105);
+        s.ThermalSustainSeconds = Math.Clamp(s.ThermalSustainSeconds, 10, 600);
+        s.BatteryMinPercent = Math.Clamp(s.BatteryMinPercent, 3, 50);
+        s.CustomTimerMinutes = Math.Clamp(s.CustomTimerMinutes, 1, 24 * 60);
+        s.CpuActiveThresholdPercent = Math.Clamp(s.CpuActiveThresholdPercent, 0.1, 50);
+        s.CpuOnlyMinGraceMinutes = Math.Clamp(s.CpuOnlyMinGraceMinutes, 0, 60);
+        s.HookStaleMinutes = Math.Clamp(s.HookStaleMinutes, 2, 240);
+        s.OtherAgents ??= string.Empty;
+        return s;
+    }
+
+    internal static void AtomicWrite(string path, string content)
+    {
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, content);
+        File.Move(tmp, path, overwrite: true);
+    }
+}

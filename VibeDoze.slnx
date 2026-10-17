@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VibeDoze/VibeDoze.csproj" />
+    <Project Path="src/VibeDoze.Hook/VibeDoze.Hook.csproj" />
+  </Folder>
+</Solution>
