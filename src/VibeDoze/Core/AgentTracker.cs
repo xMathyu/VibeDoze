@@ -29,6 +29,8 @@ internal sealed class AgentProcess
     public double CpuPercent { get; set; }
     public DateTime FirstSeenUtc { get; init; }
     public DateTime LastCpuActiveUtc { get; set; } = DateTime.MinValue;
+    /// <summary>Consecutive scans (~3 s each) above the CPU threshold.</summary>
+    public int CpuActiveStreak { get; set; }
     public DateTime LastHookUtc { get; set; } = DateTime.MinValue;
     public bool SeenByScanner { get; set; }
     public Dictionary<string, Conversation> Conversations { get; } = new();
@@ -90,7 +92,15 @@ internal sealed class AgentTracker
             p.ExePath = s.ExePath;
             p.CpuPercent = s.CpuPercent;
             p.SeenByScanner = true;
-            if (s.CpuPercent >= cpuThreshold) p.LastCpuActiveUtc = now;
+            if (s.CpuPercent >= cpuThreshold)
+            {
+                p.LastCpuActiveUtc = now;
+                p.CpuActiveStreak++;
+            }
+            else
+            {
+                p.CpuActiveStreak = 0;
+            }
             seen.Add(s.Key);
         }
 
@@ -170,6 +180,7 @@ internal sealed class AgentTracker
     public void Evaluate(DateTime now, AppSettings settings)
     {
         var stale = TimeSpan.FromMinutes(settings.HookStaleMinutes);
+        var hardCap = TimeSpan.FromMinutes(settings.HookHardCapMinutes);
         foreach (var p in _procs.Values)
         {
             bool working = false, waiting = false;
@@ -177,8 +188,10 @@ internal sealed class AgentTracker
 
             foreach (var conv in p.Conversations.Values)
             {
-                // Permission prompt answered → the tool runs and the tree uses CPU again.
-                if (conv.State == TurnState.Waiting && p.LastCpuActiveUtc > conv.StateSinceUtc.AddSeconds(5))
+                // Permission prompt answered → the tool runs and the tree uses CPU again. Require sustained
+                // CPU (2+ scans) so an idle MCP server or watcher in the tree doesn't fake it.
+                if (conv.State == TurnState.Waiting && p.CpuActiveStreak >= 2
+                    && p.LastCpuActiveUtc > conv.StateSinceUtc.AddSeconds(5))
                 {
                     conv.State = TurnState.Working;
                     conv.StateSinceUtc = p.LastCpuActiveUtc;
@@ -187,13 +200,15 @@ internal sealed class AgentTracker
                 if (conv.State == TurnState.Working)
                 {
                     var lastSign = Max(conv.LastEventUtc, p.LastCpuActiveUtc);
-                    if (now - lastSign > stale)
+                    // Interrupted (Esc fires no Stop), crashed, or ended with an error that fired no hook.
+                    // CPU alone (dev servers, watchers left running) can't keep a turn alive forever: an active
+                    // turn produces tool hooks well within the hard cap.
+                    if (now - lastSign > stale || now - conv.LastEventUtc > hardCap)
                     {
-                        // Interrupted, crashed or ended with an error that fired no hook.
                         conv.State = TurnState.Idle;
                         conv.StateSinceUtc = now;
-                        conv.LastWorkingUtc = lastSign;
-                        Log.Info($"{AgentRules.DisplayName(p.Kind)}: turno sin señales por {settings.HookStaleMinutes} min, se da por terminado");
+                        conv.LastWorkingUtc = Min(lastSign, conv.LastEventUtc + hardCap);
+                        Log.Info($"{AgentRules.DisplayName(p.Kind)}: turno sin señales del agente, se da por terminado");
                     }
                     else
                     {
@@ -270,4 +285,5 @@ internal sealed class AgentTracker
     }
 
     private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
+    private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 }

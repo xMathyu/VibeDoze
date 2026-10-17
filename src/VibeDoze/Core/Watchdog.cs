@@ -11,40 +11,50 @@ namespace VibeDoze.Core;
 internal static class Watchdog
 {
     private const string ReleasedEventName = @"Local\VibeDoze.OverrideReleased";
+    private static readonly object Gate = new();
     private static Process? _process;
 
     public static void Arm()
     {
-        try
+        lock (Gate)
         {
-            using (var ev = new EventWaitHandle(false, EventResetMode.ManualReset, ReleasedEventName))
-                ev.Reset();
+            try
+            {
+                using (var ev = new EventWaitHandle(false, EventResetMode.ManualReset, ReleasedEventName))
+                    ev.Reset();
 
-            if (_process is { HasExited: false }) return;
-            // Prefer the tiny relay exe (a few MB of RAM) over a second instance of the app.
-            var start = HookRelay.IsLightweight
-                ? new ProcessStartInfo(HookRelay.Path, $"watchdog {Environment.ProcessId} \"{AppPaths.ExePath}\"")
-                : new ProcessStartInfo(AppPaths.ExePath, $"watchdog {Environment.ProcessId}");
-            start.UseShellExecute = false;
-            start.CreateNoWindow = true;
-            _process = Process.Start(start);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("No se pudo iniciar el watchdog", ex);
+                // A watchdog that is still alive keeps watching (Disarm forgets it, so a new one is started
+                // right after a disarm; two at once is harmless — restoring is idempotent).
+                if (_process is { HasExited: false }) return;
+                // Prefer the tiny relay exe (a few MB of RAM) over a second instance of the app.
+                var start = HookRelay.IsLightweight
+                    ? new ProcessStartInfo(HookRelay.Path, $"watchdog {Environment.ProcessId} \"{AppPaths.ExePath}\"")
+                    : new ProcessStartInfo(AppPaths.ExePath, $"watchdog {Environment.ProcessId}");
+                start.UseShellExecute = false;
+                start.CreateNoWindow = true;
+                _process = Process.Start(start);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("No se pudo iniciar el watchdog", ex);
+            }
         }
     }
 
     public static void Disarm()
     {
-        try
+        lock (Gate)
         {
-            if (EventWaitHandle.TryOpenExisting(ReleasedEventName, out var ev))
-                using (ev) ev.Set();
-        }
-        catch
-        {
-            // nothing to signal
+            _process = null; // it is shutting down; never count on it for the next override
+            try
+            {
+                if (EventWaitHandle.TryOpenExisting(ReleasedEventName, out var ev))
+                    using (ev) ev.Set();
+            }
+            catch
+            {
+                // nothing to signal
+            }
         }
     }
 

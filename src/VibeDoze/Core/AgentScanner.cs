@@ -26,11 +26,13 @@ internal sealed class AgentScanner
 
     /// <param name="pinned">Processes reported by hooks (pid → creation, kind), tracked even if the rules don't match them.</param>
     /// <param name="aliases">Every agent process found inside a tree (e.g. codex.exe under its node wrapper) → its root key.</param>
-    public List<AgentSample> Scan(IReadOnlyList<string> others, IReadOnlyDictionary<int, (long Creation, AgentKind Kind)> pinned,
+    /// <returns>Null if the process snapshot failed (the caller keeps what it knew).</returns>
+    public List<AgentSample>? Scan(IReadOnlyList<string> others, IReadOnlyDictionary<int, (long Creation, AgentKind Kind)> pinned,
         out Dictionary<string, string> aliases)
     {
         aliases = new Dictionary<string, string>();
         var table = ProcessTable.Snapshot();
+        if (table.Count == 0) return null;
         long now = DateTime.UtcNow.ToFileTimeUtc();
 
         var times = new Dictionary<int, (long Creation, long Cpu)?>();

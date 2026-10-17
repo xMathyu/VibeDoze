@@ -40,6 +40,7 @@ public partial class App : Application
         _engine.ActionPending += ShowCountdown;
         _tray = new TrayIcon(_engine, this);
         _engine.Notify += (title, message) => _tray.ShowBalloon(title, message);
+        _engine.Start(); // only now: a countdown or warning raised on the first tick has someone listening
 
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showRequests,
             (_, _) => Dispatcher.BeginInvoke(ShowPanel), null, Timeout.Infinite, executeOnlyOnce: false);
@@ -101,7 +102,8 @@ public partial class App : Application
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
     {
         Log.Info($"Windows cierra la sesión ({e.ReasonSessionEnding})");
-        _engine?.Dispose(); // restores the lid action before logoff / shutdown
+        // Restore the lid / idle settings, but keep running: the shutdown may still be cancelled.
+        _engine?.PrepareForSessionEnd();
         base.OnSessionEnding(e);
     }
 

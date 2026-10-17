@@ -51,10 +51,12 @@ internal sealed class ThermalMonitor : IDisposable
         var temps = ReadArray(_temperature);
         double? hottest = null;
         string? hottestName = null;
+        var validZones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, raw) in temps)
         {
             double celsius = _highPrecision ? raw / 10.0 - 273.15 : raw - 273.15;
             if (celsius is < 1 or > 150) continue; // empty / bogus zone
+            validZones.Add(name);
             if (hottest is null || celsius > hottest)
             {
                 hottest = celsius;
@@ -70,7 +72,8 @@ internal sealed class ThermalMonitor : IDisposable
 
         if (_passiveLimit != IntPtr.Zero)
         {
-            var limits = ReadArray(_passiveLimit);
+            // Only zones with a real temperature reading; a dummy zone reporting 0 % must not look like throttling.
+            var limits = ReadArray(_passiveLimit).Where(l => validZones.Contains(l.Name) && l.Value > 0).ToList();
             PassiveLimitPercent = limits.Count == 0 ? null : limits.Min(l => l.Value);
         }
     }
@@ -89,10 +92,9 @@ internal sealed class ThermalMonitor : IDisposable
         try
         {
             if (Native.PdhGetFormattedCounterArray(counter, format, ref size, out uint count, buffer) != 0) return result;
-            // PDH_FMT_COUNTERVALUE_ITEM_W { LPWSTR szName; PDH_FMT_COUNTERVALUE { DWORD CStatus; union { double } } }
-            int stride = IntPtr.Size == 8 ? 24 : 16;
-            int statusOffset = IntPtr.Size;
-            int valueOffset = IntPtr.Size == 8 ? 16 : 8;
+            // PDH_FMT_COUNTERVALUE_ITEM_W { LPWSTR szName; PDH_FMT_COUNTERVALUE { DWORD CStatus; union { double … } } }
+            // The union holds a double, so the inner struct is 8-aligned on both x86 and x64: 24-byte items.
+            const int stride = 24, statusOffset = 8, valueOffset = 16;
             for (int i = 0; i < count; i++)
             {
                 IntPtr item = buffer + i * stride;

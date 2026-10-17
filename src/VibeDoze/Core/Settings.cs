@@ -51,6 +51,8 @@ public sealed class AppSettings
     public int CpuOnlyMinGraceMinutes { get; set; } = 5;
     /// <summary>A hook-reported "working" turn without any hook/CPU sign of life for this long is considered over (interrupted / crashed).</summary>
     public int HookStaleMinutes { get; set; } = 10;
+    /// <summary>A "working" turn with no hook event at all for this long ends, even if its process tree uses CPU.</summary>
+    public int HookHardCapMinutes { get; set; } = 30;
 
     // ── Bookkeeping ──
     /// <summary>A hook event was received at least once (Codex requires approving new hooks in /hooks).</summary>
@@ -109,6 +111,7 @@ internal static class SettingsStore
         s.CpuActiveThresholdPercent = Math.Clamp(s.CpuActiveThresholdPercent, 0.1, 50);
         s.CpuOnlyMinGraceMinutes = Math.Clamp(s.CpuOnlyMinGraceMinutes, 0, 60);
         s.HookStaleMinutes = Math.Clamp(s.HookStaleMinutes, 2, 240);
+        s.HookHardCapMinutes = Math.Clamp(s.HookHardCapMinutes, 10, 480);
         s.OtherAgents ??= string.Empty;
         return s;
     }

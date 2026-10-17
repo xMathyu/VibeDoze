@@ -98,41 +98,62 @@ internal sealed class PowerController : IDisposable
 
     // ───────────── Lid override ─────────────
 
-    /// <summary>Sets "when I close the lid: do nothing" on every power plan (AC and DC). Originals are persisted first.</summary>
+    // Everything below can run from the UI thread, the watchdog or startup recovery: serialise it.
+    private static readonly object PowerGate = new();
+    // In-memory copies of what we saved, in case state.json can't be read back later.
+    private static List<LidOriginal>? s_lidOriginals;
+    private static List<LidOriginal>? s_idleOriginals;
+
+    /// <summary>
+    /// Sets "when I close the lid: do nothing" on every power plan (AC and DC). Nothing is changed unless the
+    /// originals were saved to state.json first.
+    /// </summary>
     public bool ApplyLidOverride()
     {
         if (LidOverrideActive) return true;
-        try
+        lock (PowerGate)
         {
-            // If a previous run crashed mid-override, its saved originals are the real ones — keep them.
-            var originals = RuntimeStateStore.Load().LidOverride ?? new List<LidOriginal>();
-            foreach (var scheme in EnumerateSchemes())
+            try
             {
-                if (originals.Any(o => o.Scheme == scheme)) continue;
-                if (TryReadLid(scheme, out var ac, out var dc))
-                    originals.Add(new LidOriginal { Scheme = scheme, Ac = ac, Dc = dc });
+                if (!RuntimeStateStore.TryLoad(out var state))
+                {
+                    Log.Warn("state.json ilegible: no se cambia la acción de la tapa");
+                    return false;
+                }
+                // If a previous run crashed mid-override, its saved originals are the real ones — keep them.
+                var originals = state.LidOverride ?? s_lidOriginals?.ToList() ?? new List<LidOriginal>();
+                foreach (var scheme in EnumerateSchemes())
+                {
+                    if (originals.Any(o => o.Scheme == scheme)) continue;
+                    if (TryReadLid(scheme, out var ac, out var dc))
+                        originals.Add(new LidOriginal { Scheme = scheme, Ac = ac, Dc = dc });
+                }
+                if (originals.Count == 0)
+                {
+                    Log.Warn("No se encontraron planes de energía para modificar la tapa");
+                    return false;
+                }
+                if (!RuntimeStateStore.Update(s => s.LidOverride = originals))
+                {
+                    Log.Warn("No se pudieron guardar los valores originales: no se cambia la acción de la tapa");
+                    return false;
+                }
+                s_lidOriginals = originals;
+                Watchdog.Arm();
+
+                foreach (var o in originals)
+                    WriteLid(o.Scheme, LidDoNothing, LidDoNothing);
+                ReapplyActiveScheme();
+
+                LidOverrideActive = true;
+                Log.Info($"Tapa: 'No hacer nada' aplicado en {originals.Count} plan(es)");
+                return true;
             }
-            if (originals.Count == 0)
+            catch (Exception ex)
             {
-                Log.Warn("No se encontraron planes de energía para modificar la tapa");
+                Log.Error("No se pudo cambiar la acción de la tapa", ex);
                 return false;
             }
-
-            RuntimeStateStore.Update(s => s.LidOverride = originals);
-            Watchdog.Arm();
-
-            foreach (var o in originals)
-                WriteLid(o.Scheme, LidDoNothing, LidDoNothing);
-            ReapplyActiveScheme();
-
-            LidOverrideActive = true;
-            Log.Info($"Tapa: 'No hacer nada' aplicado en {originals.Count} plan(es)");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("No se pudo cambiar la acción de la tapa", ex);
-            return false;
         }
     }
 
@@ -140,53 +161,65 @@ internal sealed class PowerController : IDisposable
     public void EnsureOverrideOnActiveScheme()
     {
         if (!LidOverrideActive || GetActiveScheme() is not { } active) return;
-        if (!TryReadLid(active, out var ac, out var dc) || (ac == LidDoNothing && dc == LidDoNothing)) return;
-
-        RuntimeStateStore.Update(s =>
+        lock (PowerGate)
         {
-            s.LidOverride ??= new List<LidOriginal>();
-            if (!s.LidOverride.Any(o => o.Scheme == active))
-                s.LidOverride.Add(new LidOriginal { Scheme = active, Ac = ac, Dc = dc });
-        });
-        WriteLid(active, LidDoNothing, LidDoNothing);
-        ReapplyActiveScheme();
-        Log.Info("Tapa: override aplicado al nuevo plan activo");
+            if (!TryReadLid(active, out var ac, out var dc) || (ac == LidDoNothing && dc == LidDoNothing)) return;
+            var original = new LidOriginal { Scheme = active, Ac = ac, Dc = dc };
+            bool saved = RuntimeStateStore.Update(s =>
+            {
+                s.LidOverride ??= new List<LidOriginal>();
+                if (!s.LidOverride.Any(o => o.Scheme == active)) s.LidOverride.Add(original);
+            });
+            if (!saved) return;
+            s_lidOriginals ??= new List<LidOriginal>();
+            if (!s_lidOriginals.Any(o => o.Scheme == active)) s_lidOriginals.Add(original);
+            WriteLid(active, LidDoNothing, LidDoNothing);
+            ReapplyActiveScheme();
+            Log.Info("Tapa: override aplicado al nuevo plan activo");
+        }
     }
 
     public void RestoreLid() => LidOverrideActive = !RestoreLidFromState();
 
     /// <summary>
-    /// Restores the lid actions saved in state.json. Static so the watchdog and startup recovery can use it.
-    /// Only values that are still "do nothing" are reverted, so a change the user made meanwhile is kept.
+    /// Restores the lid actions saved in state.json (or kept in memory). Static so the watchdog and startup
+    /// recovery can use it. Only values that are still "do nothing" are reverted, so a change the user made
+    /// meanwhile is kept.
     /// </summary>
     public static bool RestoreLidFromState()
     {
-        try
+        lock (PowerGate)
         {
-            var originals = RuntimeStateStore.Load().LidOverride;
-            if (originals is null)
+            try
             {
+                bool readable = RuntimeStateStore.TryLoad(out var state);
+                var originals = state.LidOverride ?? s_lidOriginals;
+                if (originals is null)
+                {
+                    DisarmWatchdogIfClean();
+                    return readable;
+                }
+
+                foreach (var o in originals)
+                {
+                    if (!TryReadLid(o.Scheme, out var ac, out var dc)) continue;
+                    uint newAc = ac == LidDoNothing ? o.Ac : ac;
+                    uint newDc = dc == LidDoNothing ? o.Dc : dc;
+                    WriteLid(o.Scheme, newAc, newDc);
+                }
+                ReapplyActiveScheme();
+                s_lidOriginals = null;
+                if (!RuntimeStateStore.Update(s => s.LidOverride = null))
+                    Log.Warn("Tapa restaurada, pero no se pudo actualizar state.json");
                 DisarmWatchdogIfClean();
+                Log.Info("Tapa: acción original restaurada");
                 return true;
             }
-
-            foreach (var o in originals)
+            catch (Exception ex)
             {
-                if (!TryReadLid(o.Scheme, out var ac, out var dc)) continue;
-                uint newAc = ac == LidDoNothing ? o.Ac : ac;
-                uint newDc = dc == LidDoNothing ? o.Dc : dc;
-                WriteLid(o.Scheme, newAc, newDc);
+                Log.Error("No se pudo restaurar la acción de la tapa", ex);
+                return false;
             }
-            ReapplyActiveScheme();
-            RuntimeStateStore.Update(s => s.LidOverride = null);
-            DisarmWatchdogIfClean();
-            Log.Info("Tapa: acción original restaurada");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("No se pudo restaurar la acción de la tapa", ex);
-            return false;
         }
     }
 
@@ -200,8 +233,9 @@ internal sealed class PowerController : IDisposable
 
     private static void DisarmWatchdogIfClean()
     {
-        var state = RuntimeStateStore.Load();
-        if (state.LidOverride is null && state.IdleOverride is null) Watchdog.Disarm();
+        if (s_lidOriginals is not null || s_idleOriginals is not null) return;
+        if (RuntimeStateStore.TryLoad(out var state) && state.LidOverride is null && state.IdleOverride is null)
+            Watchdog.Disarm();
     }
 
     // ───────────── Idle sleep (Modern Standby with the lid closed) ─────────────
@@ -214,57 +248,83 @@ internal sealed class PowerController : IDisposable
     /// <summary>
     /// Modern Standby laptops have no API to "sleep now" while the screen is already off (lid closed).
     /// The supported way in is the idle timer: shorten "sleep after" so Windows enters standby by itself.
-    /// The original value is persisted and restored on resume / lid open / exit / crash recovery.
+    /// The original values (per plan) are saved first and restored on resume / lid open / exit / crash recovery.
     /// </summary>
     public static bool ArmIdleSleep(uint seconds)
     {
-        try
+        lock (PowerGate)
         {
-            if (GetActiveScheme() is not { } scheme) return false;
-            var sub = SubSleep;
-            var setting = StandbyIdle;
-            if (Native.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint ac) != 0 ||
-                Native.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint dc) != 0)
-                return false;
+            try
+            {
+                if (GetActiveScheme() is not { } scheme) return false;
+                var sub = SubSleep;
+                var setting = StandbyIdle;
+                if (Native.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint ac) != 0 ||
+                    Native.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint dc) != 0)
+                    return false;
 
-            RuntimeStateStore.Update(s => s.IdleOverride ??= new LidOriginal { Scheme = scheme, Ac = ac, Dc = dc });
-            IdleOverrideActive = true;
-            Watchdog.Arm();
-            Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, seconds);
-            Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, seconds);
-            ReapplyActiveScheme();
-            Log.Info($"Suspensión por inactividad en {seconds}s (antes: {ac}s enchufada / {dc}s batería)");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("No se pudo acortar la suspensión por inactividad", ex);
-            return false;
+                if (!RuntimeStateStore.TryLoad(out var state)) return false;
+                var originals = state.IdleOverride ?? s_idleOriginals?.ToList() ?? new List<LidOriginal>();
+                if (!originals.Any(o => o.Scheme == scheme))
+                    originals.Add(new LidOriginal { Scheme = scheme, Ac = ac, Dc = dc });
+                if (!RuntimeStateStore.Update(s => s.IdleOverride = originals))
+                {
+                    Log.Warn("No se pudo guardar la suspensión por inactividad original: no se cambia");
+                    return false;
+                }
+                s_idleOriginals = originals;
+                IdleOverrideActive = true;
+                Watchdog.Arm();
+
+                Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, seconds);
+                Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, seconds);
+                ReapplyActiveScheme();
+                Log.Info($"Suspensión por inactividad en {seconds}s (antes: {ac}s enchufada / {dc}s batería)");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("No se pudo acortar la suspensión por inactividad", ex);
+                return false;
+            }
         }
     }
 
     public static bool RestoreIdleFromState()
     {
-        try
+        lock (PowerGate)
         {
-            var original = RuntimeStateStore.Load().IdleOverride;
-            IdleOverrideActive = false;
-            if (original is null) return true;
-            var scheme = original.Scheme;
-            var sub = SubSleep;
-            var setting = StandbyIdle;
-            Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, original.Ac);
-            Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, original.Dc);
-            ReapplyActiveScheme();
-            RuntimeStateStore.Update(s => s.IdleOverride = null);
-            DisarmWatchdogIfClean();
-            Log.Info("Suspensión por inactividad restaurada");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("No se pudo restaurar la suspensión por inactividad", ex);
-            return false;
+            try
+            {
+                bool readable = RuntimeStateStore.TryLoad(out var state);
+                var originals = state.IdleOverride ?? s_idleOriginals;
+                if (originals is null)
+                {
+                    IdleOverrideActive = false;
+                    return readable;
+                }
+                var sub = SubSleep;
+                var setting = StandbyIdle;
+                foreach (var o in originals)
+                {
+                    var scheme = o.Scheme;
+                    Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, o.Ac);
+                    Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, o.Dc);
+                }
+                ReapplyActiveScheme();
+                s_idleOriginals = null;
+                IdleOverrideActive = false;
+                if (!RuntimeStateStore.Update(s => s.IdleOverride = null))
+                    Log.Warn("Suspensión por inactividad restaurada, pero no se pudo actualizar state.json");
+                DisarmWatchdogIfClean();
+                Log.Info("Suspensión por inactividad restaurada");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("No se pudo restaurar la suspensión por inactividad", ex);
+                return false;
+            }
         }
     }
 
@@ -355,11 +415,11 @@ internal sealed class PowerController : IDisposable
 
     /// <summary>
     /// Puts the machine to sleep / hibernate / off. Returns a human description of what was attempted.
-    /// On Modern Standby (S0ix) laptops SetSuspendState(sleep) is unsupported, so we either turn the
-    /// display off (which enters Modern Standby) or, when the display is already off (lid closed),
-    /// fall back to hibernation.
+    /// On Modern Standby (S0ix) laptops SetSuspendState(sleep) is unsupported, so we turn the display off
+    /// (which enters Modern Standby) and/or rely on the shortened idle timeout; hibernation is the last resort.
+    /// Runs on a worker thread (SetSuspendState blocks until resume) and touches no shared state.
     /// </summary>
-    public static string Perform(SystemAction action, IntPtr hwnd, bool displayOn)
+    public static string Perform(SystemAction action, IntPtr hwnd, bool displayOn, bool idleArmed)
     {
         Native.EnableShutdownPrivilege();
         var caps = Capabilities;
@@ -371,20 +431,20 @@ internal sealed class PowerController : IDisposable
                         Native.SHTDN_REASON_FLAG_PLANNED))
                     return "apagado";
                 Log.Warn($"ExitWindowsEx falló ({Marshal.GetLastWin32Error()}), suspendiendo en su lugar");
-                return Sleep(hwnd, displayOn, caps);
+                return Sleep(hwnd, displayOn, caps, idleArmed);
 
             case SystemAction.Hibernate:
                 if (caps.CanHibernate && Native.SetSuspendState(true, false, false))
                     return "hibernación";
                 Log.Warn("Hibernación no disponible, suspendiendo en su lugar");
-                return Sleep(hwnd, displayOn, caps);
+                return Sleep(hwnd, displayOn, caps, idleArmed);
 
             default:
-                return Sleep(hwnd, displayOn, caps);
+                return Sleep(hwnd, displayOn, caps, idleArmed);
         }
     }
 
-    private static string Sleep(IntPtr hwnd, bool displayOn, PowerCapabilities caps)
+    private static string Sleep(IntPtr hwnd, bool displayOn, PowerCapabilities caps, bool idleArmed)
     {
         if (!caps.ModernStandby)
         {
@@ -393,8 +453,8 @@ internal sealed class PowerController : IDisposable
         }
 
         // Modern Standby (S0ix): SetSuspendState(sleep) is unsupported (or hibernates). Standby is entered
-        // when the console display turns off, or when the idle timer expires. Use both.
-        bool idleArmed = ArmIdleSleep(60);
+        // when the console display turns off, or when the idle timer expires (armed by the caller on the UI
+        // thread via ArmIdleSleep). Use both.
         if (displayOn && hwnd != IntPtr.Zero)
         {
             Native.SendMessage(hwnd, Native.WM_SYSCOMMAND, new IntPtr(Native.SC_MONITORPOWER), new IntPtr(2));

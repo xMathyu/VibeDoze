@@ -77,13 +77,10 @@ namespace VibeDoze.Hook
                     if (signaled == 0) return 0; // override released normally
                 }
             }
-            catch (ArgumentException)
-            {
-                // parent already gone → restore below
-            }
             catch
             {
-                return 1;
+                // Parent already gone (GetProcessById / Handle throw) → restore below.
+                // restore-lid only acts if something is still applied, so a spurious run is harmless.
             }
 
             try

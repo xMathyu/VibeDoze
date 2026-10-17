@@ -64,6 +64,11 @@ internal sealed class Engine : IDisposable
     private DateTime? _sleepAttemptUtc;
     private bool _suspendObserved;
     private bool _disposed;
+    private DateTime _actionExecutedUtc = DateTime.MinValue;
+    private DateTime? _displayOnSinceUtc = DateTime.UtcNow;
+    private PendingAction? _shownPending;
+    /// <summary>Windows is shutting down / logging off: settings are restored and must not be re-applied.</summary>
+    private DateTime _sessionEndingUntilUtc = DateTime.MinValue;
 
     public Engine()
     {
@@ -104,10 +109,15 @@ internal sealed class Engine : IDisposable
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => Tick();
-        _timer.Start();
-        Tick();
         Log.Info($"VibeDoze iniciado (Modern Standby: {PowerController.Capabilities.ModernStandby}, " +
                  $"hibernación: {PowerController.Capabilities.CanHibernate}, sensor: {_thermal.SensorName ?? "ninguno"})");
+    }
+
+    /// <summary>Starts the loop. Called after the UI subscribed to the events, so nothing raised early is lost.</summary>
+    public void Start()
+    {
+        _timer.Start();
+        Tick();
     }
 
     // ───────────── Public state (read by the UI) ─────────────
@@ -283,6 +293,7 @@ internal sealed class Engine : IDisposable
     {
         var others = Settings.WatchOthers ? AgentRules.ParseOthers(Settings.OtherAgents) : Array.Empty<string>();
         var samples = _scanner.Scan(others, _tracker.Pinned, out var aliases);
+        if (samples is null) return; // process snapshot failed: keep the last known agents
         _tracker.ApplyScan(samples, aliases, Settings.CpuActiveThresholdPercent, now);
     }
 
@@ -297,6 +308,17 @@ internal sealed class Engine : IDisposable
 
     private void Evaluate(DateTime now)
     {
+        // 0) Someone is in front of the screen again (lid open, display on for 10 s, a while after our action).
+        if (HoldReason is not null && Interactive && !LidClosed
+            && _displayOnSinceUtc is { } displayOn && now - displayOn > TimeSpan.FromSeconds(10)
+            && now - _actionExecutedUtc > TimeSpan.FromSeconds(10))
+        {
+            Log.Info("El usuario volvió (pantalla encendida): se reanuda VibeDoze");
+            HoldReason = null;
+            _sleepAttemptUtc = null;
+            if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+        }
+
         // 1) A countdown that reached zero.
         if (Pending is { } pending && now >= pending.ExecuteAtUtc)
         {
@@ -306,7 +328,8 @@ internal sealed class Engine : IDisposable
         }
 
         var busy = _tracker.Processes.Where(a => a.Busy && IsWatched(a.Kind)).ToList();
-        bool want = Settings.Enabled && HoldReason is null && (ManualAwake || busy.Count > 0);
+        bool sessionEnding = now < _sessionEndingUntilUtc;
+        bool want = Settings.Enabled && HoldReason is null && !sessionEnding && (ManualAwake || busy.Count > 0);
 
         // 2) Battery guard.
         if (_batteryHold && (!OnBattery || BatteryPercent is null || BatteryPercent > Settings.BatteryMinPercent + 5))
@@ -320,7 +343,11 @@ internal sealed class Engine : IDisposable
         if (_batteryHold) want = false;
 
         // 3) Keep awake + lid override.
-        if (want && PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+        if (want)
+        {
+            _sleepAttemptUtc = null; // agents are busy again: never escalate an old sleep request
+            if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+        }
         _power.SetKeepAwake(want, want && Settings.KeepDisplayOn && !LidClosed, PowerReason(busy));
         bool wantOverride = want && Settings.KeepRunningWithLidClosed && PowerController.Capabilities.LidPresent;
         if (wantOverride && !_power.LidOverrideActive)
@@ -331,7 +358,7 @@ internal sealed class Engine : IDisposable
         {
             _power.RestoreLid();
             // The lid is closed and nobody is using an external screen: do what closing the lid would have done.
-            if (LidClosed && !DisplayOn && Pending is null && HoldReason is null)
+            if (Bagged && Pending is null && HoldReason is null && !sessionEnding)
             {
                 string why = _batteryHold ? "Batería baja con la tapa cerrada" : "Los agentes terminaron con la tapa cerrada";
                 StartAction(Settings.LidClosedDoneAction, _batteryHold ? ActionSource.Battery : ActionSource.Finished, why, now);
@@ -355,8 +382,8 @@ internal sealed class Engine : IDisposable
 
         // 5) Thermal guard: while we keep it awake, or whenever the lid is closed (bag!).
         //    By default only on battery: plugged in, high temperatures are normal (charging, gaming).
-        bool guard = Settings.ThermalGuard && _thermal.Available && now >= _thermalSnoozeUntilUtc && (want || LidClosed)
-                     && (OnBattery || !Settings.ThermalOnlyOnBattery);
+        bool guard = Settings.Enabled && Settings.ThermalGuard && _thermal.Available && now >= _thermalSnoozeUntilUtc
+                     && (want || LidClosed) && (OnBattery || !Settings.ThermalOnlyOnBattery);
         if (guard)
         {
             bool hot = _thermal.TemperatureC >= Settings.ThermalThresholdC
@@ -381,24 +408,45 @@ internal sealed class Engine : IDisposable
         else
         {
             _hotSinceUtc = null;
-            if (Pending?.Source == ActionSource.Thermal && Settings.ThermalOnlyOnBattery && !OnBattery)
+            if (Pending?.Source == ActionSource.Thermal)
             {
-                Log.Info("Laptop enchufada: se cancela la acción por temperatura");
+                Log.Info("La protección térmica ya no aplica (enchufada / en pausa): se cancela la acción");
                 Pending = null;
             }
         }
 
-        // 6) Sleep request that didn't take (lid closed, still running) → hibernate.
+        // 6) A pending action the user hasn't seen (scheduled while nobody was looking): show it now,
+        //    with at least 30 s left to react.
+        if (Pending is { } unseen && Interactive && !ReferenceEquals(unseen, _shownPending) && ActionPending is not null)
+        {
+            if (unseen.ExecuteAtUtc - now < ThermalCountdown)
+            {
+                Pending = unseen = new PendingAction
+                {
+                    Action = unseen.Action,
+                    Source = unseen.Source,
+                    Reason = unseen.Reason,
+                    ExecuteAtUtc = now + ThermalCountdown,
+                    CreatedUtc = now,
+                };
+            }
+            _shownPending = unseen;
+            ActionPending.Invoke(unseen);
+        }
+
+        // 7) Sleep request that didn't take (lid closed, still running) → hibernate.
         if (_sleepAttemptUtc is { } attempt && !_suspendObserved)
         {
             var since = now - attempt;
             if (since > SleepEscalation + TimeSpan.FromMinutes(2)) _sleepAttemptUtc = null;
-            else if (since >= SleepEscalation && LidClosed && !DisplayOn)
+            else if (since >= SleepEscalation && Bagged)
             {
                 _sleepAttemptUtc = null;
                 if (PowerController.Capabilities.CanHibernate)
                 {
                     Log.Warn("La laptop no entró en suspensión con la tapa cerrada; hibernando");
+                    _power.SetKeepAwake(false, false, string.Empty);
+                    if (_power.LidOverrideActive) _power.RestoreLid();
                     RunPowerAction(SystemAction.Hibernate);
                 }
             }
@@ -407,7 +455,11 @@ internal sealed class Engine : IDisposable
         UpdateHeadline(busy);
     }
 
-    private bool Interactive => DisplayOn && !LidClosed;
+    /// <summary>Someone may be looking: a screen is on (laptop panel, or an external monitor with the lid closed).</summary>
+    private bool Interactive => DisplayOn;
+
+    /// <summary>Lid closed and no screen on: the laptop is probably in a bag.</summary>
+    private bool Bagged => LidClosed && !DisplayOn;
 
     private void StartAction(SystemAction action, ActionSource source, string reason, DateTime executeAtUtc)
     {
@@ -422,8 +474,15 @@ internal sealed class Engine : IDisposable
             CreatedUtc = now,
         };
         Log.Info($"Acción programada: {ActionName(action)} ({reason}) para {executeAtUtc.ToLocalTime():HH:mm:ss}");
-        if (executeAtUtc <= now) Execute(Pending);
-        else if (Interactive) ActionPending?.Invoke(Pending);
+        if (executeAtUtc <= now)
+        {
+            Execute(Pending);
+        }
+        else if (Interactive && ActionPending is not null)
+        {
+            _shownPending = Pending;
+            ActionPending.Invoke(Pending);
+        }
     }
 
     private void Execute(PendingAction p)
@@ -431,6 +490,7 @@ internal sealed class Engine : IDisposable
         Pending = null;
         if (p.Source == ActionSource.Timer) ClearTimerCore();
         _hotSinceUtc = null;
+        _actionExecutedUtc = DateTime.UtcNow;
 
         // Stay out of the way until the user is back (lid opened / screen on / resumed by the user).
         HoldReason = p.Source switch
@@ -456,12 +516,15 @@ internal sealed class Engine : IDisposable
         _suspendObserved = false;
         _sleepAttemptUtc = action == SystemAction.Sleep ? DateTime.UtcNow : null;
         IntPtr hwnd = _window.Handle;
-        bool displayOn = Interactive;
+        bool displayOn = DisplayOn;
+        // Shared power state is only touched here, on the UI thread; the worker just triggers the transition.
+        bool idleArmed = action == SystemAction.Sleep && PowerController.Capabilities.ModernStandby
+                         && PowerController.ArmIdleSleep(60);
         Task.Run(() =>
         {
             try
             {
-                string how = PowerController.Perform(action, hwnd, displayOn);
+                string how = PowerController.Perform(action, hwnd, displayOn, idleArmed);
                 LastAction = $"{DateTime.Now:HH:mm} · {how}";
                 Log.Info($"Acción de energía: {how}");
             }
@@ -568,11 +631,42 @@ internal sealed class Engine : IDisposable
         }
     }
 
-    // ───────────── Power notifications ─────────────
+    // ───────────── Power / session notifications ─────────────
+
+    /// <summary>
+    /// Windows is about to shut down or log off: put the power settings back now, and don't re-apply them
+    /// for a while. If the shutdown gets cancelled, WM_ENDSESSION(FALSE) lifts the block right away.
+    /// </summary>
+    public void PrepareForSessionEnd()
+    {
+        if (_disposed) return;
+        _sessionEndingUntilUtc = DateTime.UtcNow.AddMinutes(2);
+        if (_power.LidOverrideActive) _power.RestoreLid();
+        if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+        Log.Info("Windows cierra la sesión: ajustes de energía restaurados");
+    }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg != Native.WM_POWERBROADCAST) return IntPtr.Zero;
+        switch (msg)
+        {
+            case Native.WM_QUERYENDSESSION:
+                PrepareForSessionEnd();
+                handled = true;
+                return new IntPtr(1); // never block shutdown
+            case Native.WM_ENDSESSION:
+                if (wParam == IntPtr.Zero)
+                {
+                    Log.Info("Se canceló el cierre de sesión: VibeDoze sigue activo");
+                    _sessionEndingUntilUtc = DateTime.MinValue;
+                }
+                return IntPtr.Zero;
+            case Native.WM_POWERBROADCAST:
+                break;
+            default:
+                return IntPtr.Zero;
+        }
+
         try
         {
             switch (wParam.ToInt32())
@@ -614,6 +708,8 @@ internal sealed class Engine : IDisposable
         Log.Info(closed ? "Tapa cerrada" : "Tapa abierta");
         if (!closed)
         {
+            // The user is back: no pending escalation, no shortened idle timeout, no hold.
+            _sleepAttemptUtc = null;
             if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
             if (HoldReason is not null)
             {
@@ -628,15 +724,13 @@ internal sealed class Engine : IDisposable
     {
         if (DisplayOn == on) return;
         DisplayOn = on;
-        bool userBack = on && !LidClosed && (_sleepAttemptUtc is null || DateTime.UtcNow - _sleepAttemptUtc > TimeSpan.FromSeconds(10));
-        if (userBack)
+        _displayOnSinceUtc = on ? DateTime.UtcNow : null;
+        if (on && !LidClosed)
         {
+            // Someone woke the screen: drop the 60 s idle timeout right away. Leaving the "hold" state waits
+            // until the screen has stayed on for a few seconds (see Evaluate), so a blip doesn't count.
+            _sleepAttemptUtc = null;
             if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
-            if (HoldReason is not null)
-            {
-                Log.Info("El usuario volvió (pantalla encendida): se reanuda VibeDoze");
-                HoldReason = null;
-            }
         }
         Refresh();
     }
