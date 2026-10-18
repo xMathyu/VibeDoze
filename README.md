@@ -100,7 +100,7 @@ Cuando se cumple el límite de tiempo con la pantalla encendida, aparece una cue
    - `PermissionRequest` / `Notification` de permiso → esperando
    - `Stop` / `StopFailure` / `Interrupt` → terminó
    - `SessionEnd` → cerrada
-3. **CPU (respaldo sin hooks).** Si el árbol de procesos del agente usa más de ~1.5 % de un núcleo, cuenta como trabajando. Como el modelo puede "pensar" sin usar CPU, en este modo el margen mínimo es de 5 min.
+3. **CPU (respaldo sin hooks).** Si el árbol de procesos del agente usa más de ~1.5 % de un núcleo durante unos 9 s seguidos, cuenta como trabajando. Los picos cortos no cuentan: la extensión de Codex arranca su `app-server` con VS Code aunque no la uses, y cada pocos minutos consulta la lista de modelos. Como el modelo puede "pensar" sin usar CPU, en este modo el margen mínimo es de 5 min.
 
 Notas de los hooks:
 

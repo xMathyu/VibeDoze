@@ -31,6 +31,8 @@ internal sealed class AgentProcess
     public DateTime LastCpuActiveUtc { get; set; } = DateTime.MinValue;
     /// <summary>Consecutive scans (~3 s each) above the CPU threshold.</summary>
     public int CpuActiveStreak { get; set; }
+    /// <summary>Last scan of a streak long enough to be work, not a background spike.</summary>
+    public DateTime LastCpuSustainedUtc { get; set; } = DateTime.MinValue;
     public DateTime LastHookUtc { get; set; } = DateTime.MinValue;
     public bool SeenByScanner { get; set; }
     public Dictionary<string, Conversation> Conversations { get; } = new();
@@ -61,6 +63,13 @@ internal sealed class AgentProcess
 /// </summary>
 internal sealed class AgentTracker
 {
+    /// <summary>
+    /// Scans in a row above the CPU threshold before CPU alone counts as work. A spike shorter than a scan
+    /// touches at most two: the Codex extension's app-server, which VS Code starts even if you never use Codex,
+    /// refreshes its model list every ~4.5 min — inside the CPU-only grace, so it looked busy forever.
+    /// </summary>
+    private const int SustainedCpuScans = 3;
+
     private readonly Dictionary<string, AgentProcess> _procs = new();
     private Dictionary<string, string> _aliases = new(); // agent key inside a tree → root key
 
@@ -98,6 +107,7 @@ internal sealed class AgentTracker
             {
                 p.LastCpuActiveUtc = now;
                 p.CpuActiveStreak++;
+                if (p.CpuActiveStreak >= SustainedCpuScans) p.LastCpuSustainedUtc = now;
             }
             else
             {
@@ -229,9 +239,9 @@ internal sealed class AgentTracker
             p.HookDriven = p.HasHooks || hookKinds.Contains(p.Kind);
             if (!p.HookDriven)
             {
-                // CPU-only detection.
-                working = now - p.LastCpuActiveUtc < TimeSpan.FromSeconds(10);
-                lastWork = Max(lastWork, p.LastCpuActiveUtc);
+                // CPU-only detection: sustained CPU only (see SustainedCpuScans).
+                working = now - p.LastCpuSustainedUtc < TimeSpan.FromSeconds(10);
+                lastWork = Max(lastWork, p.LastCpuSustainedUtc);
             }
 
             int graceMinutes = p.HookDriven
