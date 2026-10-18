@@ -38,7 +38,7 @@ public enum SlashFlag
 }
 
 /// <summary>
-/// Animates the "Slash" LED bar on the lid of ASUS ROG laptops (Zephyrus G14 / G16 2024, USB 0B05:193B)
+/// Animates the "Slash" LED bar on the lid of the ASUS ROG Zephyrus G14 2024 (USB 0B05:193B)
 /// while VibeDoze keeps the laptop working with the lid closed. The rest of the time the bar is either off
 /// (a status light only) or back to the user's own lighting.
 /// Protocol as implemented by G-Helper and asusctl: 128-byte HID feature reports, report ID 0x5E.
@@ -570,13 +570,13 @@ internal sealed class SlashLight : IDisposable
             return null;
         }
 
-        /// <summary>Zephyrus G14 2024 (GA403U…) and G16 2024 (GU605M…), the Slash boards on 193B (asusctl).</summary>
+        /// <summary>Only the Zephyrus G14 2024 (GA403, minus the 2025 boards, which use another device; asusctl's rule).</summary>
         private static bool IsSlashBoard()
         {
             using var bios = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\BIOS");
-            string board = $"{bios?.GetValue("BaseBoardProduct")} {bios?.GetValue("SystemProductName")}";
-            return board.Contains("GA403U", StringComparison.OrdinalIgnoreCase)
-                   || board.Contains("GU605M", StringComparison.OrdinalIgnoreCase);
+            string board = $"{bios?.GetValue("BaseBoardProduct")} {bios?.GetValue("SystemProductName")}".ToUpperInvariant();
+            string[] g14Of2025 = { "GA403W", "GA403UH", "GA403UM", "GA403UP", "GA403GM" };
+            return board.Contains("GA403") && !g14Of2025.Any(model => board.Contains(model));
         }
 
         private static List<string> InterfacePaths()
