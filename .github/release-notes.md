@@ -2,7 +2,7 @@ Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con 
 
 ### Novedades
 
-- **Luz Slash** (solo ROG Zephyrus G14 de 2024): la barra de la tapa es una luz de estado. Mientras usas la laptop queda apagada; con la tapa cerrada muestra si un agente trabaja (una luz que la recorre), necesita tu respuesta (doble parpadeo) o terminó (respiración lenta). Funciona también con batería. Pruébala en *Ajustes → Tapa y energía*; si prefieres ver tu animación de Armoury Crate con la tapa abierta, desactiva *Apagada mientras usas la laptop*.
+- **Luz Slash** (laptops ROG con barra Slash, como las Zephyrus G14 y G16 desde 2024): la barra de la tapa es una luz de estado. Mientras usas la laptop queda apagada; con la tapa cerrada muestra si un agente trabaja (una luz que la recorre), necesita tu respuesta (doble parpadeo) o terminó (respiración lenta). Funciona también con batería. Pruébala en *Ajustes → Tapa y energía*; si prefieres ver tu animación de Armoury Crate con la tapa abierta, desactiva *Apagada mientras usas la laptop*.
 - Las sesiones abiertas pero inactivas (por ejemplo, una pestaña de Claude Code en VS Code) ya no aparecen como "Trabajando" cuando los hooks están activos, ni mantienen la laptop despierta.
 
 ### Instalación

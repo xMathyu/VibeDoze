@@ -38,18 +38,17 @@ public enum SlashFlag
 }
 
 /// <summary>
-/// Animates the "Slash" LED bar on the lid of the ASUS ROG Zephyrus G14 2024 (USB 0B05:193B)
+/// Animates the "Slash" LED bar on the lid of ASUS ROG laptops (Zephyrus G14 / G16 from 2024 and their successors)
 /// while VibeDoze keeps the laptop working with the lid closed. The rest of the time the bar is either off
 /// (a status light only) or back to the user's own lighting.
-/// Protocol as implemented by G-Helper and asusctl: 128-byte HID feature reports, report ID 0x5E.
+/// Protocol as implemented by G-Helper and asusctl: HID feature reports of 128 bytes (0x5E on 193B, 0x5D on 19B6).
 /// The worker thread owns the device; the engine only says which pattern it wants.
 /// </summary>
 internal sealed class SlashLight : IDisposable
 {
     private const int FrameMs = 50; // 20 fps: smooth on 7 segments for ~2 ms of USB I/O per frame
-    private const int Segments = 7;
 
-    private static readonly Lazy<string?> DevicePath = new(SlashHid.Find);
+    private static readonly Lazy<SlashDevice?> Device = new(SlashHid.Find);
 
     /// <summary>"Probar": each pattern long enough to read it (two blinks, one full breath).</summary>
     private static readonly (SlashPattern Pattern, TimeSpan Length)[] PreviewSteps =
@@ -77,7 +76,7 @@ internal sealed class SlashLight : IDisposable
         if (RuntimeStateStore.TryLoad(out var state) && state.SlashDark) _dark = true;
     }
 
-    public static bool Present => DevicePath.Value is not null;
+    public static bool Present => Device.Value is not null;
 
     /// <summary>The preview's pattern at this point, Off once it's over.</summary>
     public static SlashPattern PreviewPattern(TimeSpan elapsed)
@@ -177,13 +176,14 @@ internal sealed class SlashLight : IDisposable
         SlashOriginal? original = null;
         try
         {
-            hid = SlashHid.Open(DevicePath.Value!);
+            var device = Device.Value!;
+            hid = SlashHid.Open(device);
             byte level = 0xFF;
             var clock = Stopwatch.StartNew();
             var shown = SlashPattern.Off;
-            var frame = new byte[4 + Segments];
+            var frame = new byte[4 + device.Segments];
             frame[0] = 0xD3;
-            frame[3] = Segments;
+            frame[3] = (byte)device.Segments;
             while (true)
             {
                 SlashPattern wanted;
@@ -353,10 +353,10 @@ internal sealed class SlashLight : IDisposable
     {
         if (!RuntimeStateStore.TryLoad(out var state)) return false;
         if (state.Slash is null && !state.SlashDark) return true;
-        if (DevicePath.Value is not { } path) return false;
+        if (Device.Value is not { } device) return false;
         try
         {
-            using var hid = SlashHid.Open(path);
+            using var hid = SlashHid.Open(device);
             if (state.Slash is not null)
             {
                 if (!RestoreCore(hid, state.Slash, dark: false)) return false;
@@ -469,7 +469,7 @@ internal sealed class SlashLight : IDisposable
         {
             double p = pattern switch
             {
-                SlashPattern.Working => Comet(t, i),
+                SlashPattern.Working => Comet(t, i, segments.Length),
                 SlashPattern.Waiting => DoubleBlink(t),
                 _ => Breathing(t),
             };
@@ -478,12 +478,14 @@ internal sealed class SlashLight : IDisposable
     }
 
     /// <summary>A light with a fading tail runs along the bar over a faint glow: work in progress.</summary>
-    private static double Comet(double t, int segment)
+    private static double Comet(double t, int segment, int count)
     {
+        // Measured in segments of the 7-segment bar, so the long 35-segment bar shows the same motion.
         const double period = 1.6, tail = 3.2, lead = 0.7, glow = 0.22;
         // The head travels past the last segment so the tail clears before the next pass.
-        double head = t % period / period * (Segments + tail + lead) - lead;
-        double d = head - (Segments - 1 - segment); // runs in the same direction the battery level fills
+        double head = t % period / period * (7 + tail + lead) - lead;
+        double position = (count - 1 - segment) * 6.0 / Math.Max(1, count - 1); // the way the battery level fills
+        double d = head - position;
         double v = d >= 0 ? 1 - d / tail : 1 + d / lead;
         return Math.Max(glow, v);
     }
@@ -509,28 +511,36 @@ internal sealed class SlashLight : IDisposable
 
     // ───────────── HID transport ─────────────
 
+    /// <summary>Where the bar is: its HID collection, the report it listens on and how many segments it has.</summary>
+    private sealed record SlashDevice(string Path, byte ReportId, int ReportLength, int Segments);
+
     private sealed class SlashHid : IDisposable
     {
-        private const int ReportLength = 128;
-        private const byte ReportId = 0x5E;
+        private const int MinReportLength = 128;
 
         private readonly SafeFileHandle _handle;
+        private readonly SlashDevice _device;
 
-        private SlashHid(SafeFileHandle handle) => _handle = handle;
-
-        public static SlashHid Open(string path)
+        private SlashHid(SafeFileHandle handle, SlashDevice device)
         {
-            var handle = CreateFile(path, GenericRead | GenericWrite, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            _handle = handle;
+            _device = device;
+        }
+
+        public static SlashHid Open(SlashDevice device)
+        {
+            var handle = CreateFile(device.Path, GenericRead | GenericWrite, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
             if (handle.IsInvalid) throw new IOException($"No se pudo abrir la luz Slash (error {Marshal.GetLastWin32Error()})");
-            return new SlashHid(handle);
+            return new SlashHid(handle, device);
         }
 
         public void Set(params byte[] command)
         {
-            var buffer = new byte[ReportLength];
-            buffer[0] = ReportId;
-            command.AsSpan(0, Math.Min(command.Length, ReportLength - 1)).CopyTo(buffer.AsSpan(1));
-            if (!HidD_SetFeature(_handle, buffer, ReportLength))
+            int length = _device.ReportLength;
+            var buffer = new byte[length];
+            buffer[0] = _device.ReportId;
+            command.AsSpan(0, Math.Min(command.Length, length - 1)).CopyTo(buffer.AsSpan(1));
+            if (!HidD_SetFeature(_handle, buffer, length))
                 throw new IOException($"La luz Slash no aceptó el comando {command[0]:X2} (error {Marshal.GetLastWin32Error()})");
         }
 
@@ -538,9 +548,9 @@ internal sealed class SlashLight : IDisposable
         public byte[] Read(params byte[] request)
         {
             Set(request);
-            var buffer = new byte[ReportLength];
-            buffer[0] = ReportId;
-            if (!HidD_GetFeature(_handle, buffer, ReportLength))
+            var buffer = new byte[_device.ReportLength];
+            buffer[0] = _device.ReportId;
+            if (!HidD_GetFeature(_handle, buffer, buffer.Length))
                 throw new IOException($"La luz Slash no respondió (error {Marshal.GetLastWin32Error()})");
             return buffer;
         }
@@ -548,19 +558,26 @@ internal sealed class SlashLight : IDisposable
         public void Dispose() => _handle.Dispose();
 
         /// <summary>
-        /// The 193B collection with 128-byte feature reports (the others are firmware update / input). Older
-        /// AniMe Matrix laptops reuse 193B with another protocol, so only the 2024 Slash boards qualify.
+        /// Like G-Helper: on a Slash model, the collection with a feature report of 128+ bytes under the Slash
+        /// report ID, 19B6 / 0x5D (2025 on, shared with the keyboard) or 193B / 0x5E (2024). The model check
+        /// keeps out the older AniMe Matrix laptops, which reuse 193B with another protocol.
         /// </summary>
-        public static string? Find()
+        public static SlashDevice? Find()
         {
             try
             {
-                if (!IsSlashBoard()) return null;
-                foreach (var path in InterfacePaths())
+                if (SlashSegments() is not { } segments) return null;
+                var paths = InterfacePaths();
+                foreach (var (product, reportId) in new[] { ("vid_0b05&pid_19b6", (byte)0x5D), ("vid_0b05&pid_193b", (byte)0x5E) })
                 {
-                    if (!path.Contains("vid_0b05&pid_193b", StringComparison.OrdinalIgnoreCase)) continue;
-                    using var handle = CreateFile(path, GenericRead | GenericWrite, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
-                    if (!handle.IsInvalid && FeatureLength(handle) == ReportLength) return path;
+                    foreach (var path in paths)
+                    {
+                        if (!path.Contains(product, StringComparison.OrdinalIgnoreCase)) continue;
+                        using var handle = CreateFile(path, GenericRead | GenericWrite, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+                        if (handle.IsInvalid) continue;
+                        int length = FeatureLength(handle, reportId);
+                        if (length >= MinReportLength) return new SlashDevice(path, reportId, length, segments);
+                    }
                 }
             }
             catch (Exception ex)
@@ -570,13 +587,17 @@ internal sealed class SlashLight : IDisposable
             return null;
         }
 
-        /// <summary>Only the Zephyrus G14 2024 (GA403, minus the 2025 boards, which use another device; asusctl's rule).</summary>
-        private static bool IsSlashBoard()
+        /// <summary>
+        /// Slash models (G-Helper and asusctl): Zephyrus G14 GA403, G16 GU605 / GA605, Strix G614F; the 2026
+        /// GA405 / GU405 / GU606 / GX651 have the long bar with 35 segments. Null on any other laptop.
+        /// </summary>
+        private static int? SlashSegments()
         {
             using var bios = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\BIOS");
             string board = $"{bios?.GetValue("BaseBoardProduct")} {bios?.GetValue("SystemProductName")}".ToUpperInvariant();
-            string[] g14Of2025 = { "GA403W", "GA403UH", "GA403UM", "GA403UP", "GA403GM" };
-            return board.Contains("GA403") && !g14Of2025.Any(model => board.Contains(model));
+            if (new[] { "GA405", "GU405", "GU606", "GX651" }.Any(model => board.Contains(model))) return 35;
+            if (new[] { "GA403", "GU605", "GA605", "G614F" }.Any(model => board.Contains(model))) return 7;
+            return null;
         }
 
         private static List<string> InterfacePaths()
@@ -613,13 +634,27 @@ internal sealed class SlashLight : IDisposable
             return paths;
         }
 
-        private static int FeatureLength(SafeFileHandle handle)
+        /// <summary>The collection's feature report length if it has a feature report with this ID, else 0.</summary>
+        private static unsafe int FeatureLength(SafeFileHandle handle, byte reportId)
         {
             if (!HidD_GetPreparsedData(handle, out var data)) return 0;
             try
             {
                 var caps = default(HIDP_CAPS);
-                return HidP_GetCaps(data, ref caps) == HidpStatusSuccess ? caps.FeatureReportByteLength : 0;
+                if (HidP_GetCaps(data, ref caps) != HidpStatusSuccess) return 0;
+                bool found = HasReport(HidP_GetButtonCaps, caps.Rest[24]) || HasReport(HidP_GetValueCaps, caps.Rest[25]);
+                return found ? caps.FeatureReportByteLength : 0;
+
+                // HIDP_BUTTON_CAPS and HIDP_VALUE_CAPS are 72 bytes each, with the report ID at offset 2.
+                bool HasReport(GetCaps get, ushort count)
+                {
+                    if (count == 0) return false;
+                    var buffer = new byte[72 * count];
+                    if (get(HidpFeature, buffer, ref count, data) != HidpStatusSuccess) return false;
+                    for (int i = 0; i < count; i++)
+                        if (buffer[i * 72 + 2] == reportId) return true;
+                    return false;
+                }
             }
             finally
             {
@@ -627,10 +662,13 @@ internal sealed class SlashLight : IDisposable
             }
         }
 
+        private delegate int GetCaps(int reportType, byte[] caps, ref ushort count, IntPtr data);
+
         private const uint GenericRead = 0x80000000, GenericWrite = 0x40000000;
         private const uint FileShareRead = 1, FileShareWrite = 2, OpenExisting = 3;
         private const int DigcfPresent = 0x2, DigcfDeviceInterface = 0x10;
         private const int HidpStatusSuccess = 0x00110000;
+        private const int HidpFeature = 2;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct SP_DEVICE_INTERFACE_DATA
@@ -645,7 +683,7 @@ internal sealed class SlashLight : IDisposable
         private unsafe struct HIDP_CAPS
         {
             public ushort Usage, UsagePage, InputReportByteLength, OutputReportByteLength, FeatureReportByteLength;
-            public fixed ushort Rest[27]; // Reserved[17] + 10 counts
+            public fixed ushort Rest[27]; // Reserved[17], then the counts: … [24] feature button caps, [25] feature value caps
         }
 
         [DllImport("hid.dll")]
@@ -669,6 +707,12 @@ internal sealed class SlashLight : IDisposable
 
         [DllImport("hid.dll")]
         private static extern int HidP_GetCaps(IntPtr data, ref HIDP_CAPS caps);
+
+        [DllImport("hid.dll")]
+        private static extern int HidP_GetButtonCaps(int reportType, byte[] caps, ref ushort count, IntPtr data);
+
+        [DllImport("hid.dll")]
+        private static extern int HidP_GetValueCaps(int reportType, byte[] caps, ref ushort count, IntPtr data);
 
         [DllImport("setupapi.dll", SetLastError = true)]
         private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, IntPtr enumerator, IntPtr parent, int flags);
