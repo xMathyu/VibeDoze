@@ -119,10 +119,11 @@ internal sealed class Updater
             DownloadPercent = 0;
             Directory.CreateDirectory(dir);
             string part = target + ".part";
-            if (assets.TryGetValue("VibeDoze.zip", out var zipUrl))
+            bool viaZip = assets.TryGetValue("VibeDoze.zip", out var zipUrl);
+            if (viaZip)
             {
                 string zip = Path.Combine(dir, $"VibeDoze-{latest}.zip");
-                await DownloadAsync(zipUrl, zip).ConfigureAwait(false);
+                await DownloadAsync(zipUrl!, zip).ConfigureAwait(false);
                 using (var archive = ZipFile.OpenRead(zip))
                 {
                     var entry = archive.GetEntry("VibeDoze.exe") ?? throw new InvalidDataException("VibeDoze.zip no contiene VibeDoze.exe");
@@ -148,7 +149,7 @@ internal sealed class Updater
             File.Move(part, target, overwrite: true);
             ReadyExe = target;
             Status = UpdateStatus.Ready;
-            Log.Info($"Actualización {latest} descargada y verificada");
+            Log.Info($"Actualización {latest} descargada ({(viaZip ? "VibeDoze.zip" : "VibeDoze.exe")}) y verificada");
         }
         catch (Exception ex)
         {

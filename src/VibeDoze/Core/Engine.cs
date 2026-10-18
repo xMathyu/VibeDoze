@@ -154,7 +154,7 @@ internal sealed class Engine : IDisposable
     public bool CanRestartSafely =>
         !_power.KeepingAwake && !_power.LidOverrideActive && !PowerController.IdleOverrideActive
         && Pending is null && HoldReason is null && _sleepAttemptUtc is null
-        && !_tracker.Processes.Any(a => a.Busy);
+        && !_tracker.Processes.Any(a => a.Busy && IsWatched(a.Kind));
 
     public bool IsWatched(AgentKind kind) => kind switch
     {
