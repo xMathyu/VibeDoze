@@ -46,7 +46,7 @@ internal sealed class Engine : IDisposable
     private static readonly TimeSpan SleepEscalation = TimeSpan.FromSeconds(150);
 
     private readonly PowerController _power = new();
-    private readonly SlashLight _slash = new();
+    private readonly SlashLight _slash;
     private readonly AgentScanner _scanner = new();
     private readonly AgentTracker _tracker = new();
     private readonly ThermalMonitor _thermal = new();
@@ -85,6 +85,7 @@ internal sealed class Engine : IDisposable
             Log.Warn("Se encontró un ajuste de energía sin restaurar (cierre inesperado); restaurando");
             PowerController.RestoreAllFromState();
         }
+        _slash = new SlashLight(); // after the recovery: it picks up whether the bar was left off on purpose
         if (state.TimerDeadlineUtc is { } deadline && deadline > DateTime.UtcNow.AddSeconds(30))
             TimerDeadlineUtc = deadline;
         else if (state.TimerDeadlineUtc is not null)
@@ -341,7 +342,10 @@ internal sealed class Engine : IDisposable
         }
     }
 
-    private void UpdateSlash(DateTime now) => _slash.Show(SlashTarget(now));
+    private void UpdateSlash(DateTime now) => _slash.Show(SlashTarget(now), SlashDarkWhenIdle);
+
+    /// <summary>The Slash is a status light: off while the laptop is in use (unless the user prefers their animation).</summary>
+    private bool SlashDarkWhenIdle => Settings.Enabled && Settings.SlashWhileLidClosed && Settings.SlashOffWhileOpen;
 
     /// <summary>The Slash only lights up while we keep the laptop working with the lid closed (or for the preview).</summary>
     private SlashPattern SlashTarget(DateTime now)
@@ -569,7 +573,7 @@ internal sealed class Engine : IDisposable
         if (p.Source is ActionSource.Thermal or ActionSource.Battery)
             RaiseNotify("VibeDoze", $"{p.Reason}. {ActionName(p.Action)} para proteger la laptop.");
         Log.Info($"Ejecutando: {ActionName(p.Action)} — {p.Reason}");
-        _slash.Release(TimeSpan.FromSeconds(1)); // the user's lighting (and its sleep animation) before suspending
+        _slash.Release(TimeSpan.FromSeconds(1), keepDark: true); // the animation ends before suspending
         RunPowerAction(p.Action);
     }
 
@@ -705,7 +709,7 @@ internal sealed class Engine : IDisposable
         _sessionEndingUntilUtc = DateTime.UtcNow.AddMinutes(2);
         if (_power.LidOverrideActive) _power.RestoreLid();
         if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
-        _slash.Release(TimeSpan.FromSeconds(1));
+        _slash.Release(TimeSpan.FromSeconds(1), keepDark: true); // off until VibeDoze starts again
         Log.Info("Windows cierra la sesión: ajustes de energía restaurados");
     }
 
@@ -744,7 +748,7 @@ internal sealed class Engine : IDisposable
                     _suspendObserved = true;
                     _sleepAttemptUtc = null;
                     Log.Info("Sistema entrando en suspensión");
-                    _slash.Release(TimeSpan.FromMilliseconds(500));
+                    _slash.Release(TimeSpan.FromMilliseconds(500), keepDark: true);
                     break;
                 case Native.PBT_APMRESUMEAUTOMATIC:
                     OnResume(byUser: false);
@@ -754,6 +758,7 @@ internal sealed class Engine : IDisposable
                     break;
                 case Native.PBT_APMPOWERSTATUSCHANGE:
                     ReadBattery();
+                    _slash.Reassert();
                     break;
             }
         }
@@ -774,6 +779,7 @@ internal sealed class Engine : IDisposable
         {
             // The user is back: no pending escalation, no shortened idle timeout, no hold.
             _sleepAttemptUtc = null;
+            _slash.Reassert();
             if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
             if (HoldReason is not null)
             {
@@ -802,6 +808,7 @@ internal sealed class Engine : IDisposable
     private void OnResume(bool byUser)
     {
         Log.Info(byUser ? "Reanudado por el usuario" : "Reanudado");
+        _slash.Reassert();
         if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
         _suspendObserved = true;
         _sleepAttemptUtc = null;
@@ -825,7 +832,7 @@ internal sealed class Engine : IDisposable
         _hookServer.Dispose();
         foreach (var h in _powerNotifications) Native.UnregisterPowerSettingNotification(h);
         if (_suspendNotification != IntPtr.Zero) Native.UnregisterSuspendResumeNotification(_suspendNotification);
-        _slash.Dispose();
+        _slash.Dispose(keepDark: DateTime.UtcNow < _sessionEndingUntilUtc);
         _power.Dispose();
         _thermal.Dispose();
         _window.Dispose();

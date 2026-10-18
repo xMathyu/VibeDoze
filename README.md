@@ -16,7 +16,7 @@ Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains 
 |---|---|
 | **Detección de agentes** | Claude Code y Codex, cada uno con su interruptor. Muestra cada sesión con su IDE o terminal, el proyecto y su estado (trabajando, esperando permiso, terminó). |
 | **Tapa cerrada** | Mientras un agente trabaja, cerrar la tapa no suspende la laptop. Cuando termina (más un margen configurable), la laptop se suspende sola. |
-| **Luz Slash** | En las ROG Zephyrus con barra Slash en la tapa (G14 y G16 de 2024), mientras trabaja con la tapa cerrada la barra muestra el estado: una luz que recorre la barra mientras un agente trabaja, doble parpadeo si espera tu permiso y respiración lenta al terminar. Después vuelve tu animación de Armoury Crate. Se prueba en *Ajustes → Tapa y energía → Probar*. |
+| **Luz Slash** | En las ROG Zephyrus con barra Slash en la tapa (G14 y G16 de 2024), la barra es una luz de estado: apagada mientras usas la laptop y, con la tapa cerrada, una luz que la recorre mientras un agente trabaja, doble parpadeo si necesita tu respuesta y respiración lenta al terminar. Funciona también con batería. Se prueba en *Ajustes → Tapa y energía → Probar*. Si prefieres tu animación de Armoury Crate con la tapa abierta, desactiva *Apagada mientras usas la laptop*; al salir de VibeDoze también vuelve. |
 | **Límite de tiempo** | 15 min, 30 min, 1 h, 2 h, 4 h, 8 h o un valor personalizado. Al llegar: suspender, hibernar o apagar. Si estás frente a la pantalla, aparece una cuenta regresiva de 60 s con *Posponer 15 min* y *Cancelar*. |
 | **Protección térmica** | Lee los sensores térmicos ACPI de Windows (sin admin). Si se supera el límite (80 °C por defecto) durante un tiempo sostenido (1 min), suspende o hiberna. Con la tapa abierta avisa 30 s antes. Por defecto **solo actúa con batería**: enchufada es normal que se caliente (cargando, jugando con agentes corriendo). Se puede cambiar con "Solo con batería". |
 | **Batería baja** | Por debajo del porcentaje elegido deja de mantenerla despierta y, si la tapa está cerrada, la suspende. |
@@ -118,7 +118,7 @@ Para seguir trabajando con la tapa cerrada, VibeDoze cambia temporalmente la acc
 - Al iniciar sesión, la app restaura lo que haya quedado pendiente.
 - Al apagar o cerrar sesión, Windows avisa a la app y esta también restaura.
 
-La **luz Slash** sigue la misma regla: antes de animarla, VibeDoze guarda en `state.json` la animación, el brillo y los ajustes de la barra, y al terminar los vuelve a escribir tal cual. Para que se vea con la tapa cerrada activa *"Mantener la iluminación con la tapa cerrada"* mientras dura, y luego la deja como la tenías en Armoury Crate.
+La **luz Slash** sigue la misma regla: antes de animarla, VibeDoze guarda en `state.json` la animación, el brillo y los ajustes de la barra, y al terminar los vuelve a escribir tal cual. Para que se vea con la tapa cerrada y con batería activa esas opciones mientras dura, y luego las deja como las tienes en Armoury Crate. Para apagarla mientras usas la laptop usa el mismo interruptor general de Armoury Crate; `VibeDoze.exe restore-lid` (y salir de la app) la vuelve a encender.
 
 Muchas laptops modernas usan **Modern Standby (S0)**; `powercfg /a` te dice si la tuya es una de ellas. En ellas Windows no permite "suspender ahora" por API con la pantalla apagada. Cuando un agente termina con la tapa cerrada, VibeDoze baja temporalmente *"Suspender tras inactividad"* a 1 minuto para que Windows entre en reposo por sí mismo, y restaura el valor al despertar. Si en 2½ minutos la laptop sigue encendida (por ejemplo, porque otra app la mantiene despierta), la **hiberna**. Con la tapa abierta, "suspender" apaga la pantalla, que es lo que activa el Modern Standby.
 
@@ -151,7 +151,7 @@ VibeDoze.exe                       abre la app (o su panel si ya está abierta)
 VibeDoze.exe --background          inicia solo en la bandeja
 VibeDoze.exe --quit                cierra la instancia abierta
 VibeDoze.exe restore-lid           restaura la acción de la tapa, la suspensión por inactividad y la luz Slash
-VibeDoze.exe slash-preview         muestra las animaciones de la luz Slash (~13 s) y restaura la tuya
+VibeDoze.exe slash-preview         muestra las animaciones de la luz Slash (~13 s) y la deja como estaba
 VibeDoze.exe install-hooks [claude|codex|all]
 VibeDoze.exe uninstall-hooks [claude|codex|all]
 VibeDoze.exe snapshot [carpeta] [light|dark]

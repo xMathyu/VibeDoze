@@ -273,7 +273,16 @@
                                     <Button x:Name="SlashPreviewButton" DockPanel.Dock="Right" Content="Probar" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" VerticalAlignment="Center" Click="OnSlashPreview" />
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="Luz Slash con la tapa cerrada" Style="{StaticResource VD.RowTitle}" />
-                                        <TextBlock Text="La barra de la tapa se anima mientras un agente trabaja, parpadea si espera tu permiso y respira al terminar." Style="{StaticResource VD.Caption}" />
+                                        <TextBlock Text="Con la tapa cerrada, la barra muestra el estado: una luz la recorre mientras un agente trabaja, parpadea si necesita tu respuesta y respira al terminar." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border x:Name="SlashDarkRow" Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <CheckBox x:Name="SlashDarkSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Apagada mientras usas la laptop" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Apagada mientras usas la laptop" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="La barra solo se enciende con la tapa cerrada. Desactívalo para ver tu animación de Armoury Crate." Style="{StaticResource VD.Caption}" />
                                     </StackPanel>
                                 </DockPanel>
                             </Border>

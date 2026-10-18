@@ -33,6 +33,8 @@ public sealed class AppSettings
     public bool KeepDisplayOn { get; set; } = false;
     /// <summary>ROG laptops with a Slash LED bar: animate it while working with the lid closed.</summary>
     public bool SlashWhileLidClosed { get; set; } = true;
+    /// <summary>The Slash is only a status light: off while the lid is open (instead of the Armoury Crate animation).</summary>
+    public bool SlashOffWhileOpen { get; set; } = true;
     /// <summary>Minutes to keep the laptop awake after the agent finished (time to read the result).</summary>
     public int FinishGraceMinutes { get; set; } = 2;
 

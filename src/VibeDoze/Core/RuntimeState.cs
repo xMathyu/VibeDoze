@@ -13,6 +13,8 @@ public sealed class RuntimeState
     public List<LidOriginal>? IdleOverride { get; set; }
     /// <summary>The Slash lighting while VibeDoze animates it with the lid closed.</summary>
     public SlashOriginal? Slash { get; set; }
+    /// <summary>The Slash is switched off while the laptop is in use (its master switch).</summary>
+    public bool SlashDark { get; set; }
     public DateTime? TimerDeadlineUtc { get; set; }
 }
 

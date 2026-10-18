@@ -79,7 +79,7 @@ internal static class Watchdog
     private static void RestoreIfNeeded(string why)
     {
         var state = RuntimeStateStore.Load();
-        if (state.LidOverride is null && state.IdleOverride is null && state.Slash is null) return;
+        if (state.LidOverride is null && state.IdleOverride is null && state.Slash is null && !state.SlashDark) return;
         Log.Warn($"Watchdog: {why}; restaurando ajustes de energía");
         PowerController.RestoreAllFromState();
     }

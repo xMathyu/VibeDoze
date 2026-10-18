@@ -89,6 +89,9 @@ public partial class SettingsWindow : Window
             DisplaySwitch.IsChecked = s.KeepDisplayOn;
             SlashRow.Visibility = SlashLight.Present ? Visibility.Visible : Visibility.Collapsed;
             SlashSwitch.IsChecked = s.SlashWhileLidClosed;
+            SlashDarkRow.Visibility = SlashRow.Visibility;
+            SlashDarkSwitch.IsChecked = s.SlashOffWhileOpen;
+            SlashDarkSwitch.IsEnabled = s.SlashWhileLidClosed;
             SlashPreviewButton.IsEnabled = !_engine.SlashPreviewing;
             SlashPreviewButton.Content = _engine.SlashPreviewing ? "Mira la tapa…" : "Probar";
             ThermalSwitch.IsChecked = s.ThermalGuard;
@@ -251,6 +254,7 @@ public partial class SettingsWindow : Window
         s.KeepRunningWithLidClosed = LidSwitch.IsChecked == true;
         s.KeepDisplayOn = DisplaySwitch.IsChecked == true;
         s.SlashWhileLidClosed = SlashSwitch.IsChecked == true;
+        s.SlashOffWhileOpen = SlashDarkSwitch.IsChecked == true;
         s.ThermalGuard = ThermalSwitch.IsChecked == true;
         s.ThermalOnlyOnBattery = ThermalBatterySwitch.IsChecked == true;
         s.BatteryGuard = BatterySwitch.IsChecked == true;
