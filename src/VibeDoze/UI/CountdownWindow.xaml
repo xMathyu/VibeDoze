@@ -2,39 +2,42 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="VibeDoze"
-        Width="420"
+        Width="512"
         SizeToContent="Height"
         WindowStyle="None"
+        AllowsTransparency="True"
+        ThemeMode="None"
+        Background="Transparent"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Topmost="True"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
-        BorderThickness="1"
-        UseLayoutRounding="True">
-    <StackPanel Margin="22,20,22,18">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Grid Width="52" Height="52" Margin="0,0,16,0" VerticalAlignment="Top">
-                <Ellipse x:Name="Halo" Opacity="0.18" />
-                <TextBlock x:Name="Seconds" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-            </Grid>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock x:Name="TitleText" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                <TextBlock x:Name="Reason" Style="{StaticResource Secondary}" Margin="0,3,0,0" FontSize="13" />
+        UseLayoutRounding="True"
+        FontFamily="{StaticResource VD.Font}"
+        Foreground="{DynamicResource VD.Text}">
+    <Grid Margin="16">
+        <Border CornerRadius="22" Background="{DynamicResource VD.Module}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="40" ShadowDepth="10" Direction="270" Opacity="0.3" />
+            </Border.Effect>
+        </Border>
+        <Border CornerRadius="22" Background="{DynamicResource VD.Module}" BorderBrush="{DynamicResource VD.Hair}" BorderThickness="1" Padding="28,26,28,24">
+            <StackPanel>
+                <Grid Width="84" Height="84" HorizontalAlignment="Center">
+                    <Ellipse Margin="3" Stroke="{DynamicResource VD.Fill}" StrokeThickness="6" />
+                    <Path x:Name="Ring" StrokeThickness="6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <TextBlock x:Name="Seconds" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock x:Name="TitleText" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center"
+                           TextWrapping="Wrap" Margin="0,14,0,0" />
+                <TextBlock x:Name="Reason" Style="{StaticResource VD.Caption}" FontSize="13" HorizontalAlignment="Center" TextAlignment="Center"
+                           Margin="0,6,0,20" />
+                <UniformGrid Rows="1">
+                    <Button x:Name="PostponeButton" Content="Posponer 15 min" Style="{StaticResource VD.CapsuleFill}" Height="38" Margin="0,0,4,0" Click="OnPostpone" />
+                    <Button x:Name="CancelButton" Content="Cancelar" Style="{StaticResource VD.CapsuleFill}" Height="38" Margin="4,0" Click="OnCancel" />
+                    <Button x:Name="NowButton" Style="{StaticResource VD.CapsuleAccent}" Height="38" Margin="4,0,0,0" Click="OnNow" />
+                </UniformGrid>
             </StackPanel>
-        </Grid>
-        <ProgressBar x:Name="Progress" Height="4" Margin="0,16,0,16" Minimum="0" Maximum="1" />
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="PostponeButton" Content="Posponer 15 min" Margin="0,0,8,0" Click="OnPostpone" />
-            <Button x:Name="CancelButton" Content="Cancelar" Margin="0,0,8,0" Click="OnCancel" />
-            <Button x:Name="NowButton" Content="Ahora" Style="{DynamicResource AccentButtonStyle}" Click="OnNow" />
-        </StackPanel>
-    </StackPanel>
+        </Border>
+    </Grid>
 </Window>

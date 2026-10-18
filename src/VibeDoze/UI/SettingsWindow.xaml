@@ -1,0 +1,466 @@
+<Window x:Class="VibeDoze.UI.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:VibeDoze.UI"
+        Title="Ajustes de VibeDoze"
+        Width="920"
+        Height="660"
+        MinWidth="780"
+        MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        Background="{DynamicResource VD.Content}"
+        FontFamily="{StaticResource VD.Font}"
+        Foreground="{DynamicResource VD.Text}">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232" />
+            <ColumnDefinition />
+        </Grid.ColumnDefinitions>
+
+        <!-- ───────── Sidebar ───────── -->
+        <Border Background="{DynamicResource VD.Sidebar}" BorderBrush="{DynamicResource VD.Sep}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="10,16,10,14">
+                <TextBlock x:Name="VersionText" DockPanel.Dock="Bottom" Style="{StaticResource VD.Caption}" Margin="9,0,0,0" />
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="8,0,0,18">
+                        <Image x:Name="Logo" Width="28" Height="28" RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock Text="VibeDoze" FontSize="15" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <RadioButton x:Name="NavGeneral" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecGeneral" Checked="OnNav">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.Gray}">
+                                <ui:GlyphIcon Data="{StaticResource G.Sliders}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
+                            </Border>
+                            <TextBlock Text="General" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavAgents" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecAgents" Checked="OnNav">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.Accent}">
+                                <ui:GlyphIcon Data="{StaticResource G.Terminal}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
+                            </Border>
+                            <TextBlock Text="Agentes" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavLid" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecLid" Checked="OnNav">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.GreenDot}">
+                                <ui:GlyphIcon Data="{StaticResource G.Laptop}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
+                            </Border>
+                            <TextBlock Text="Tapa y energía" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavTimer" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecTimer" Checked="OnNav">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.Orange}">
+                                <ui:GlyphIcon Data="{StaticResource G.Timer}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
+                            </Border>
+                            <TextBlock Text="Límite de tiempo" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavProtection" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecProtection" Checked="OnNav">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.Red}">
+                                <ui:GlyphIcon Data="{StaticResource G.Thermo}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
+                            </Border>
+                            <TextBlock Text="Protección" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavUpdates" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecUpdates" Checked="OnNav">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.Blue}">
+                                <ui:GlyphIcon Data="{StaticResource G.Update}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
+                            </Border>
+                            <TextBlock Text="Actualizaciones" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ───────── Content ───────── -->
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid Margin="32,26,32,32" MaxWidth="680" HorizontalAlignment="Stretch">
+
+                <!-- General -->
+                <StackPanel x:Name="SecGeneral">
+                    <DockPanel Margin="0,0,0,20">
+                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.Gray}" Margin="0,0,14,0">
+                            <ui:GlyphIcon Data="{StaticResource G.Sliders}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="General" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Cómo arranca VibeDoze y cómo te avisa." Style="{StaticResource VD.Caption}" FontSize="13" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource VD.GroupCard}" Margin="0,0,0,22">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <CheckBox x:Name="EnabledSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="VibeDoze activado" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="VibeDoze activado" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Apágalo para pausarlo sin cerrarlo: no mantiene despierta la laptop ni toca la tapa." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <CheckBox x:Name="StartupSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnStartupClick" AutomationProperties.Name="Iniciar con Windows" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Iniciar con Windows" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Arranca en la bandeja al iniciar sesión." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <CheckBox x:Name="NotifySwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Notificaciones" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Notificaciones" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Avisos de temperatura, batería, límite de tiempo y actualizaciones." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Diagnóstico" Style="{StaticResource VD.GroupTitle}" />
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <TextBlock x:Name="LidNowText" DockPanel.Dock="Right" Style="{StaticResource VD.Caption}" FontSize="13" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="12,0,0,0" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Al cerrar la tapa, ahora" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="La acción que Windows aplica en este momento." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Abrir" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" Click="OnOpenLog" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Registro de actividad" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="LastActionText" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Abrir" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" Click="OnOpenSettingsFile" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Ajustes avanzados" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="settings.json: umbral de CPU, otros agentes, repositorio de actualizaciones." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Agents -->
+                <StackPanel x:Name="SecAgents" Visibility="Collapsed">
+                    <DockPanel Margin="0,0,0,20">
+                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.Accent}" Margin="0,0,14,0">
+                            <ui:GlyphIcon Data="{StaticResource G.Terminal}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Agentes" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Elige qué agentes mantienen despierta la laptop." Style="{StaticResource VD.Caption}" FontSize="13" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource VD.GroupCard}" Margin="0,0,0,22">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Width="26" Height="26" CornerRadius="7" Background="{DynamicResource VD.Accent}" Margin="0,0,12,0">
+                                        <ui:GlyphIcon Data="{StaticResource G.Terminal}" Width="15" Height="15" Foreground="White" Thickness="2.2" />
+                                    </Border>
+                                    <CheckBox x:Name="ClaudeSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Vigilar Claude Code" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Claude Code" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="ClaudeInfo" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Width="26" Height="26" CornerRadius="7" Background="{DynamicResource VD.Accent}" Margin="0,0,12,0">
+                                        <ui:GlyphIcon Data="{StaticResource G.Sparkle}" Width="15" Height="15" Foreground="White" Thickness="2.2" />
+                                    </Border>
+                                    <CheckBox x:Name="CodexSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Vigilar Codex" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Codex" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="CodexInfo" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Width="26" Height="26" CornerRadius="7" Background="{DynamicResource VD.Gray}" Margin="0,0,12,0">
+                                        <ui:GlyphIcon Data="{StaticResource G.Dots}" Width="15" Height="15" Foreground="White" Filled="True" />
+                                    </Border>
+                                    <CheckBox x:Name="OthersSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Vigilar otros agentes" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Otros agentes" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="OthersInfo" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Detección precisa (hooks)" Style="{StaticResource VD.GroupTitle}" />
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <Button x:Name="ClaudeHookButton" DockPanel.Dock="Right" Style="{StaticResource VD.CapsuleFill}" MinWidth="84" Margin="12,0,0,0" Click="OnClaudeHookClick" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Hooks de Claude Code" Style="{StaticResource VD.RowTitle}" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <Ellipse x:Name="ClaudeHookDot" Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ClaudeHookStatus" Style="{StaticResource VD.Caption}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Button x:Name="CodexHookButton" DockPanel.Dock="Right" Style="{StaticResource VD.CapsuleFill}" MinWidth="84" Margin="12,0,0,0" Click="OnCodexHookClick" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Hooks de Codex" Style="{StaticResource VD.RowTitle}" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <Ellipse x:Name="CodexHookDot" Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="CodexHookStatus" Style="{StaticResource VD.Caption}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Style="{StaticResource VD.Caption}" Margin="4,8,0,0"
+                               Text="Sin hooks, VibeDoze detecta el trabajo por uso de CPU. Con hooks sabe exactamente cuándo empieza y termina cada respuesta." />
+                </StackPanel>
+
+                <!-- Lid and power -->
+                <StackPanel x:Name="SecLid" Visibility="Collapsed">
+                    <DockPanel Margin="0,0,0,20">
+                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.GreenDot}" Margin="0,0,14,0">
+                            <ui:GlyphIcon Data="{StaticResource G.Laptop}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Tapa y energía" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Qué pasa mientras los agentes trabajan y cuando terminan." Style="{StaticResource VD.Caption}" FontSize="13" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <CheckBox x:Name="LidSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Seguir trabajando con la tapa cerrada" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Seguir trabajando con la tapa cerrada" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Mientras un agente trabaja, cerrar la tapa no suspende la laptop. Cuando termina, se suspende sola." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <ComboBox x:Name="LidDoneAction" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Al terminar con la tapa cerrada" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="En Modern Standby, suspender tarda ~1 min; si no entra, hiberna." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <ComboBox x:Name="GraceCombo" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Margen después de terminar" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Tiempo para leer la respuesta antes de soltar la laptop." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <CheckBox x:Name="DisplaySwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Mantener la pantalla encendida" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Mantener la pantalla encendida" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Solo con la tapa abierta, mientras un agente trabaja." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Timer -->
+                <StackPanel x:Name="SecTimer" Visibility="Collapsed">
+                    <DockPanel Margin="0,0,0,20">
+                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.Orange}" Margin="0,0,14,0">
+                            <ui:GlyphIcon Data="{StaticResource G.Timer}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Límite de tiempo" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Cuánto tiempo más puede seguir encendida la laptop." Style="{StaticResource VD.Caption}" FontSize="13" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <Button x:Name="ClearTimerButton" DockPanel.Dock="Right" Content="Quitar límite" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" Click="OnClearTimer" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="TimerTitle" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="TimerSub" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}" Padding="0,12,0,6">
+                                <WrapPanel>
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="15 min" Tag="15" Margin="0,0,8,8" Click="OnTimerPreset" />
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="30 min" Tag="30" Margin="0,0,8,8" Click="OnTimerPreset" />
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="1 h" Tag="60" Margin="0,0,8,8" Click="OnTimerPreset" />
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="2 h" Tag="120" Margin="0,0,8,8" Click="OnTimerPreset" />
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="4 h" Tag="240" Margin="0,0,8,8" Click="OnTimerPreset" />
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="8 h" Tag="480" Margin="0,0,8,8" Click="OnTimerPreset" />
+                                </WrapPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Iniciar" Style="{StaticResource VD.CapsuleAccent}" Height="30" Margin="8,0,0,0" Click="OnCustomTimer" />
+                                    <TextBlock DockPanel.Dock="Right" Text="min" Style="{StaticResource VD.Caption}" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <TextBox x:Name="CustomMinutes" DockPanel.Dock="Right" Width="72" VerticalContentAlignment="Center" KeyDown="OnCustomMinutesKey"
+                                             AutomationProperties.Name="Minutos personalizados" />
+                                    <TextBlock Text="Personalizado" Style="{StaticResource VD.RowTitle}" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <ComboBox x:Name="TimerAction" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Al llegar al límite" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Si estás frente a la pantalla, te avisa 60 s antes para posponer o cancelar." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Protection -->
+                <StackPanel x:Name="SecProtection" Visibility="Collapsed">
+                    <DockPanel Margin="0,0,0,20">
+                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.Red}" Margin="0,0,14,0">
+                            <ui:GlyphIcon Data="{StaticResource G.Thermo}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Protección" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Para que no se recaliente ni se quede sin batería dentro de una funda." Style="{StaticResource VD.Caption}" FontSize="13" />
+                        </StackPanel>
+                    </DockPanel>
+                    <TextBlock Text="Temperatura" Style="{StaticResource VD.GroupTitle}" />
+                    <Border Style="{StaticResource VD.GroupCard}" Margin="0,0,0,22">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <CheckBox x:Name="ThermalSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Protección térmica" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Protección térmica" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="ThermalInfo" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <StackPanel x:Name="ThermalOptions">
+                                <Border Style="{StaticResource VD.RowNext}" Padding="0,10,0,6">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock x:Name="ThresholdText" DockPanel.Dock="Right" FontSize="13" FontWeight="SemiBold" />
+                                            <TextBlock Text="Temperatura límite" Style="{StaticResource VD.RowTitle}" />
+                                        </DockPanel>
+                                        <Slider x:Name="ThresholdSlider" Minimum="60" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" Margin="0,6,0,0"
+                                                ValueChanged="OnThresholdChanged" PreviewMouseUp="OnThresholdCommit" KeyUp="OnThresholdCommitKey"
+                                                AutomationProperties.Name="Temperatura límite" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource VD.RowNext}">
+                                    <DockPanel>
+                                        <ComboBox x:Name="SustainCombo" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
+                                        <TextBlock Text="Durante al menos" Style="{StaticResource VD.RowTitle}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </Border>
+                                <Border Style="{StaticResource VD.RowNext}">
+                                    <DockPanel>
+                                        <ComboBox x:Name="ThermalAction" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
+                                        <TextBlock Text="Entonces" Style="{StaticResource VD.RowTitle}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </Border>
+                                <Border Style="{StaticResource VD.RowNext}">
+                                    <DockPanel>
+                                        <CheckBox x:Name="ThermalBatterySwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Solo con batería" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Solo con batería" Style="{StaticResource VD.RowTitle}" />
+                                            <TextBlock Text="Enchufada es normal que se caliente (cargando, jugando con agentes corriendo)." Style="{StaticResource VD.Caption}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="Batería" Style="{StaticResource VD.GroupTitle}" />
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <Border Style="{StaticResource VD.Row}">
+                            <DockPanel>
+                                <CheckBox x:Name="BatterySwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Protección de batería" />
+                                <ComboBox x:Name="BatteryCombo" DockPanel.Dock="Right" Width="96" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Batería baja" Style="{StaticResource VD.RowTitle}" />
+                                    <TextBlock Text="Deja de mantenerla despierta y, si la tapa está cerrada, la suspende." Style="{StaticResource VD.Caption}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </Border>
+                </StackPanel>
+
+                <!-- Updates -->
+                <StackPanel x:Name="SecUpdates" Visibility="Collapsed">
+                    <DockPanel Margin="0,0,0,20">
+                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.Blue}" Margin="0,0,14,0">
+                            <ui:GlyphIcon Data="{StaticResource G.Update}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Actualizaciones" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Las versiones nuevas llegan desde GitHub Releases." Style="{StaticResource VD.Caption}" FontSize="13" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <CheckBox x:Name="AutoUpdateSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Actualizar automáticamente" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Actualizar automáticamente" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Descarga en segundo plano, verifica el SHA-256 e instala cuando ningún agente esté trabajando." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <Button x:Name="UpdateButton" DockPanel.Dock="Right" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" Click="OnUpdateClick" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="VersionTitle" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock x:Name="UpdateStatusText" Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>

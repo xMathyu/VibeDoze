@@ -14,22 +14,16 @@ internal enum TrayState
     Alert,
 }
 
-/// <summary>Draws the tray icons at runtime so they stay crisp at any DPI.</summary>
+/// <summary>
+/// Tray icons drawn at runtime: a monochrome cup that matches the taskbar (white on dark, graphite on light).
+/// It steams while an agent works; the only colour is the status dot, cut out of the cup.
+/// </summary>
 internal static class IconFactory
 {
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr handle);
 
-    public static Color ColorOf(TrayState state) => state switch
-    {
-        TrayState.Awake => Color.FromArgb(16, 185, 129),   // emerald
-        TrayState.Held => Color.FromArgb(245, 158, 11),    // amber
-        TrayState.Alert => Color.FromArgb(239, 68, 68),    // red
-        TrayState.Paused => Color.FromArgb(115, 115, 115), // gray
-        _ => Color.FromArgb(99, 102, 241),                 // indigo
-    };
-
-    public static Icon Create(TrayState state, int size)
+    public static Icon Create(TrayState state, int size, bool darkTaskbar)
     {
         using var bitmap = new Bitmap(size, size, PixelFormat.Format32bppArgb);
         using (var g = Graphics.FromImage(bitmap))
@@ -37,29 +31,31 @@ internal static class IconFactory
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.Clear(Color.Transparent);
+            g.ScaleTransform(size / 24f, size / 24f);
 
-            float s = size;
-            var background = ColorOf(state);
-            using (var brush = new SolidBrush(state == TrayState.Paused ? Color.FromArgb(170, background) : background))
-                g.FillEllipse(brush, s * 0.02f, s * 0.02f, s * 0.96f, s * 0.96f);
+            var ink = darkTaskbar ? Color.White : Color.FromArgb(29, 29, 31);
+            if (state == TrayState.Paused) ink = Color.FromArgb(darkTaskbar ? 110 : 95, ink);
+            bool steam = state is TrayState.Awake or TrayState.Alert;
+            DrawCup(g, ink, steam, size);
 
-            using var white = new SolidBrush(Color.White);
-            switch (state)
+            Color? badge = state switch
             {
-                case TrayState.Awake:
-                    DrawSun(g, s);
-                    break;
-                case TrayState.Held:
-                    g.FillRectangle(white, s * 0.33f, s * 0.28f, s * 0.12f, s * 0.44f);
-                    g.FillRectangle(white, s * 0.55f, s * 0.28f, s * 0.12f, s * 0.44f);
-                    break;
-                case TrayState.Alert:
-                    g.FillRectangle(white, s * 0.44f, s * 0.20f, s * 0.12f, s * 0.38f);
-                    g.FillEllipse(white, s * 0.43f, s * 0.66f, s * 0.14f, s * 0.14f);
-                    break;
-                default:
-                    DrawMoon(g, s, white);
-                    break;
+                TrayState.Awake => darkTaskbar ? Color.FromArgb(48, 209, 88) : Color.FromArgb(52, 199, 89),
+                TrayState.Held => darkTaskbar ? Color.FromArgb(255, 159, 10) : Color.FromArgb(255, 149, 0),
+                TrayState.Alert => darkTaskbar ? Color.FromArgb(255, 69, 58) : Color.FromArgb(255, 59, 48),
+                _ => null,
+            };
+            if (badge is { } color)
+            {
+                // Punch a transparent ring around the badge so it reads on any taskbar colour.
+                const float cx = 19.2f, cy = 19.2f, r = 4.2f, ring = 1.5f;
+                var previous = g.CompositingMode;
+                g.CompositingMode = CompositingMode.SourceCopy;
+                using (var clear = new SolidBrush(Color.Transparent))
+                    g.FillEllipse(clear, cx - r - ring, cy - r - ring, 2 * (r + ring), 2 * (r + ring));
+                g.CompositingMode = previous;
+                using var fill = new SolidBrush(color);
+                g.FillEllipse(fill, cx - r, cy - r, 2 * r, 2 * r);
             }
         }
 
@@ -74,30 +70,41 @@ internal static class IconFactory
         }
     }
 
-    private static void DrawMoon(Graphics g, float s, Brush brush)
+    private static void DrawCup(Graphics g, Color ink, bool steam, int pixelSize)
     {
-        using var outer = new GraphicsPath();
-        outer.AddEllipse(s * 0.22f, s * 0.20f, s * 0.56f, s * 0.56f);
-        using var cut = new GraphicsPath();
-        cut.AddEllipse(s * 0.38f, s * 0.10f, s * 0.50f, s * 0.50f);
-        using var region = new Region(outer);
-        region.Exclude(cut);
-        g.FillRegion(brush, region);
+        // Slightly heavier strokes when the icon is tiny, so the handle and steam don't vanish.
+        float boost = pixelSize <= 20 ? 1.18f : 1f;
+
+        using var body = new GraphicsPath();
+        body.AddLine(4.5f, 10.5f, 15.5f, 10.5f);
+        body.AddLine(15.5f, 10.5f, 15.5f, 15.5f);
+        body.AddBezier(15.5f, 15.5f, 15.5f, 17.7f, 13.7f, 19.5f, 11.5f, 19.5f);
+        body.AddLine(11.5f, 19.5f, 8.5f, 19.5f);
+        body.AddBezier(8.5f, 19.5f, 6.3f, 19.5f, 4.5f, 17.7f, 4.5f, 15.5f);
+        body.CloseFigure();
+        using (var brush = new SolidBrush(ink)) g.FillPath(brush, body);
+
+        using var handle = new GraphicsPath();
+        handle.AddLine(15.5f, 12f, 16.8f, 12f);
+        handle.AddArc(14.5f, 12f, 4.6f, 4.6f, -90, 180);
+        handle.AddLine(16.8f, 16.6f, 15.5f, 16.6f);
+        using (var pen = RoundPen(ink, 1.7f * boost)) g.DrawPath(pen, handle);
+
+        if (!steam) return;
+        using var vapour = new GraphicsPath();
+        foreach (float x in new[] { 8f, 12f })
+        {
+            vapour.StartFigure();
+            vapour.AddBezier(x, 8.4f, x - 1, 7.4f, x + 1, 6.5f, x, 5.5f);
+            vapour.AddBezier(x, 5.5f, x - 1, 4.5f, x + 1, 3.6f, x, 2.6f);
+        }
+        using (var pen = RoundPen(ink, 1.5f * boost)) g.DrawPath(pen, vapour);
     }
 
-    private static void DrawSun(Graphics g, float s)
+    private static Pen RoundPen(Color color, float width) => new(color, width)
     {
-        float c = s / 2f;
-        using var white = new SolidBrush(Color.White);
-        float r = s * 0.15f;
-        g.FillEllipse(white, c - r, c - r, r * 2, r * 2);
-        using var pen = new Pen(Color.White, Math.Max(1.3f, s * 0.075f)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-        for (int i = 0; i < 8; i++)
-        {
-            double a = i * Math.PI / 4;
-            float x1 = c + (float)Math.Cos(a) * s * 0.25f, y1 = c + (float)Math.Sin(a) * s * 0.25f;
-            float x2 = c + (float)Math.Cos(a) * s * 0.35f, y2 = c + (float)Math.Sin(a) * s * 0.35f;
-            g.DrawLine(pen, x1, y1, x2, y2);
-        }
-    }
+        StartCap = LineCap.Round,
+        EndCap = LineCap.Round,
+        LineJoin = LineJoin.Round,
+    };
 }

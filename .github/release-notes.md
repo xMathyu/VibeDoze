@@ -5,6 +5,8 @@ Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con 
 1. Descarga **VibeDoze.exe** desde *Assets*. Es un único ejecutable que no necesita instalar .NET.
 2. Guárdalo donde quieras (por ejemplo, `%LOCALAPPDATA%\Programs\VibeDoze`) y ábrelo.
 3. Windows SmartScreen puede advertir porque el ejecutable no está firmado. Elige *Más información → Ejecutar de todas formas*.
-4. En el panel activa **Iniciar con Windows** y, en **Detección precisa (hooks)**, pulsa **Activar** para Claude Code y Codex. En Codex, aprueba los hooks una vez con `/hooks`.
+4. Abre **Ajustes** desde el panel. En *General* activa **Iniciar con Windows** y, en *Agentes → Detección precisa (hooks)*, pulsa **Activar** para Claude Code y Codex. En Codex, aprueba los hooks una vez con `/hooks`.
+
+Si ya tienes VibeDoze, se actualiza solo cuando no hay agentes trabajando.
 
 Requisitos: Windows 10/11 x64.

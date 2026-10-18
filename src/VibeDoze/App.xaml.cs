@@ -25,6 +25,7 @@ public partial class App : Application
     private DateTime? _quietSinceUtc;
     private TrayIcon? _tray;
     private MainWindow? _panel;
+    private SettingsWindow? _settings;
     private CountdownWindow? _countdown;
     private bool _quitting;
 
@@ -48,6 +49,12 @@ public partial class App : Application
             PowerController.RestoreAllFromState(); // never leave the lid override behind
         };
 
+        ThemeManager.Initialize();
+        if (_args.Length > 0 && _args[0].Equals("snapshot", StringComparison.OrdinalIgnoreCase))
+        {
+            StartSnapshot();
+            return;
+        }
         _engine = new Engine();
         _updater = new Updater(_engine.Settings);
         _engine.ActionPending += ShowCountdown;
@@ -82,6 +89,33 @@ public partial class App : Application
             _engine.SaveSettings();
         }
         if (!_startHidden || firstRun) ShowPanel();
+    }
+
+    /// <summary>"snapshot [folder] [light|dark]": run briefly, render the windows to PNG, restore everything, exit.</summary>
+    private void StartSnapshot()
+    {
+        string dir = _args.Length > 1 ? _args[1] : Path.Combine(AppPaths.LocalDir, "snapshots");
+        if (_args.Length > 2 && _args[2] is "dark" or "light") ThemeManager.Force(_args[2] == "dark");
+        _engine = new Engine();
+        _updater = new Updater(_engine.Settings);
+        _engine.Start();
+        var wait = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        wait.Tick += (_, _) =>
+        {
+            wait.Stop();
+            try
+            {
+                Snapshot.Render(_engine, this, dir);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("No se pudieron generar las capturas", ex);
+            }
+            _quitting = true;
+            _engine.Dispose(); // restores anything the short run applied
+            Shutdown();
+        };
+        wait.Start();
     }
 
     /// <summary>Checks GitHub now and then; installs a downloaded update once the app has been quiet for a while.</summary>
@@ -129,6 +163,20 @@ public partial class App : Application
         _panel.ShowNearTray();
     }
 
+    internal void ShowSettings(string? section = null)
+    {
+        if (_engine is null || _quitting) return;
+        if (_settings is null)
+        {
+            _settings = new SettingsWindow(_engine, this);
+            _settings.Closed += (_, _) => _settings = null;
+            _settings.Show();
+        }
+        if (section is not null) _settings.ShowSection(section);
+        if (_settings.WindowState == WindowState.Minimized) _settings.WindowState = WindowState.Normal;
+        _settings.Activate();
+    }
+
     internal void TogglePanel()
     {
         if (_panel is { IsVisible: true })
@@ -157,6 +205,7 @@ public partial class App : Application
         _quitting = true;
         _updateTimer?.Stop();
         _countdown?.Close();
+        _settings?.Close();
         _panel?.Close();
         _tray?.Dispose();
         _engine?.Dispose();

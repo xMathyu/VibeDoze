@@ -8,8 +8,18 @@ internal static class Log
 
     public static void Info(string message) => Write("INFO", message);
     public static void Warn(string message) => Write("WARN", message);
-    public static void Error(string message, Exception? ex = null) =>
-        Write("ERROR", ex is null ? message : $"{message}: {ex.GetType().Name}: {ex.Message}");
+    public static void Error(string message, Exception? ex = null)
+    {
+        if (ex is null)
+        {
+            Write("ERROR", message);
+            return;
+        }
+        var text = $"{message}: {ex.GetType().Name}: {ex.Message}";
+        for (var inner = ex.InnerException; inner is not null; inner = inner.InnerException)
+            text += $" → {inner.GetType().Name}: {inner.Message}";
+        Write("ERROR", text);
+    }
 
     private static void Write(string level, string message)
     {

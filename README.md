@@ -4,6 +4,12 @@ App de bandeja para Windows que **mantiene tu laptop despierta mientras Claude C
 
 Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains y con cualquier terminal (CLI de `claude` o `codex`).
 
+<p align="center">
+  <img src="docs/panel-light.png" width="300" alt="Panel de VibeDoze en modo claro">
+  &nbsp;
+  <img src="docs/panel-dark.png" width="300" alt="Panel de VibeDoze en modo oscuro">
+</p>
+
 ## Qué hace
 
 | Función | Detalle |
@@ -23,7 +29,7 @@ Es un único ejecutable autocontenido: no hay que instalar .NET ni tener permiso
 
 1. Guárdalo donde quieras (por ejemplo, `%LOCALAPPDATA%\Programs\VibeDoze`) y ábrelo.
 2. El ejecutable no está firmado, así que Windows SmartScreen puede advertir. Elige *Más información → Ejecutar de todas formas*.
-3. En el panel activa **Iniciar con Windows** y, en **Detección precisa (hooks)**, pulsa **Activar** para Claude Code y Codex.
+3. Abre **Ajustes** desde el panel. En *General* activa **Iniciar con Windows** y, en *Agentes → Detección precisa (hooks)*, pulsa **Activar** para Claude Code y Codex.
 
 ### Actualizaciones automáticas
 
@@ -32,7 +38,7 @@ VibeDoze revisa las [Releases](https://github.com/xMathyu/VibeDoze/releases) de 
 - Si hay una versión nueva, la descarga en segundo plano (`VibeDoze.zip`, más liviano) y verifica el `.exe` contra `VibeDoze.exe.sha256`. Si no coincide, la descarta.
 - La instala sola cuando lleva 2 minutos sin agentes trabajando y sin cambios aplicados a la tapa. Así nunca reinicia en medio de una sesión.
 - El reemplazo lo hace `VibeDoze.Hook.exe` cuando VibeDoze ya se cerró. Si algo falla, deja el ejecutable anterior y lo vuelve a abrir.
-- Desde el panel puedes buscar o instalar al momento, o desactivar la opción *Actualizar automáticamente*. El repositorio de origen se cambia con `UpdateRepository` en `settings.json`.
+- En *Ajustes → Actualizaciones* puedes buscar o instalar al momento, o desactivar *Actualizar automáticamente*. El repositorio de origen se cambia con `UpdateRepository` en `settings.json`.
 
 Para publicar una versión nueva:
 
@@ -60,18 +66,29 @@ Windows 11 oculta los iconos nuevos de la bandeja. Para fijar el de VibeDoze ve 
 
 ## Uso
 
-- **Clic izquierdo** en el icono abre el panel con el estado y todos los ajustes.
+- **Clic izquierdo** en el icono abre el panel: estado, sesiones, límite de tiempo y protecciones. Sigue el tema claro u oscuro de Windows.
 - **Clic derecho** abre los accesos rápidos: activar o pausar, Claude Code, Codex, tapa cerrada, límite de tiempo, protección térmica, suspender ahora y salir.
+- **Ajustes** (en el pie del panel o en el menú) abre la ventana con todas las opciones, agrupadas en General, Agentes, Tapa y energía, Límite de tiempo, Protección y Actualizaciones.
 
-Colores del icono:
+<p align="center">
+  <img src="docs/settings-agents-light.png" width="640" alt="Ajustes: agentes y hooks">
+</p>
 
-| Color | Estado |
+El icono de la bandeja es una taza de café monocroma que combina con la barra de tareas (blanca en tema oscuro, grafito en claro):
+
+<p align="center"><img src="docs/tray-icons.png" alt="Iconos de la bandeja"></p>
+
+| Icono | Estado |
 |---|---|
-| Morado (luna) | En reposo, esperando a que un agente trabaje |
-| Verde (sol) | Manteniendo despierta |
-| Ámbar | En espera tras una suspensión automática, o cuenta regresiva |
-| Rojo | Alerta térmica |
-| Gris | En pausa |
+| Taza sin vapor | En reposo, esperando a que un agente trabaje |
+| Taza con vapor y punto verde | Manteniendo despierta |
+| Taza con punto ámbar | En espera tras una suspensión automática, o cuenta regresiva |
+| Taza con vapor y punto rojo | Alerta térmica |
+| Taza atenuada | En pausa |
+
+Cuando se cumple el límite de tiempo con la pantalla encendida, aparece una cuenta regresiva de 60 s:
+
+<p align="center"><img src="docs/countdown-light.png" width="300" alt="Cuenta regresiva"></p>
 
 ## Cómo sabe que un agente está trabajando
 
@@ -113,7 +130,7 @@ Muchas laptops modernas usan **Modern Standby (S0)**; `powercfg /a` te dice si l
 | `%LOCALAPPDATA%\VibeDoze\update\` | Versión nueva ya descargada y verificada, esperando a instalarse |
 | `%APPDATA%\VibeDoze\settings.json` | Ajustes |
 
-Ajustes avanzados, solo editables en `settings.json` (botón *Ajustes avanzados* del panel):
+Ajustes avanzados, solo editables en `settings.json` (*Ajustes → General → Ajustes avanzados*):
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
@@ -133,13 +150,15 @@ VibeDoze.exe --quit                cierra la instancia abierta
 VibeDoze.exe restore-lid           restaura la acción de la tapa y la suspensión por inactividad
 VibeDoze.exe install-hooks [claude|codex|all]
 VibeDoze.exe uninstall-hooks [claude|codex|all]
+VibeDoze.exe snapshot [carpeta] [light|dark]
+                                   guarda capturas PNG del panel, los ajustes, la cuenta regresiva y los iconos
 ```
 
 ## Solución de problemas
 
-- **La laptop no se suspende al cerrar la tapa, ni siquiera sin agentes.** Revisa el pie del panel ("Acción de la tapa ahora"). Ejecuta `VibeDoze.exe restore-lid`, o restáuralo a mano: `powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1` y `powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1`.
+- **La laptop no se suspende al cerrar la tapa, ni siquiera sin agentes.** Revisa *Ajustes → General → Diagnóstico → Al cerrar la tapa, ahora*. Ejecuta `VibeDoze.exe restore-lid`, o restáuralo a mano: `powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1` y `powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1`.
 - **Codex aparece como "detección por CPU" con los hooks instalados.** Aprueba los hooks en Codex (`/hooks`).
-- **¿Qué está haciendo?** Revisa *Abrir registro* en el panel. Con una consola de administrador, `powercfg /requests` muestra `VibeDoze: Claude Code trabajando` mientras la mantiene despierta.
+- **¿Qué está haciendo?** Abre el *Registro de actividad* en *Ajustes → General → Diagnóstico*. Con una consola de administrador, `powercfg /requests` muestra `VibeDoze: Claude Code trabajando` mientras la mantiene despierta.
 
 ## Desinstalar
 
@@ -149,7 +168,7 @@ VibeDoze.exe uninstall-hooks [claude|codex|all]
 
 Quita los hooks, la entrada de inicio, el acceso directo y los archivos, y deja la acción de la tapa como estaba.
 
-Si usaste el `.exe` descargado, ejecuta `VibeDoze.exe uninstall-hooks` (o pulsa **Quitar** en el panel), apaga *Iniciar con Windows*, sal de la app y borra el exe y las carpetas `%LOCALAPPDATA%\VibeDoze` y `%APPDATA%\VibeDoze`.
+Si usaste el `.exe` descargado, ejecuta `VibeDoze.exe uninstall-hooks` (o pulsa **Quitar** en *Ajustes → Agentes*), apaga *Iniciar con Windows*, sal de la app y borra el exe y las carpetas `%LOCALAPPDATA%\VibeDoze` y `%APPDATA%\VibeDoze`.
 
 ## Estructura
 
@@ -162,6 +181,8 @@ src/VibeDoze/           App WPF (.NET 10, autocontenida)
   Core/Hooks.cs           servidor del named pipe y ayudante
   Core/Integrations.cs    instalar/quitar hooks de Claude Code y Codex; inicio con Windows
   Core/ThermalMonitor.cs  sensores térmicos ACPI (contadores PDH)
-  UI/                     panel, cuenta regresiva, icono de bandeja
+  UI/                     panel, ajustes, cuenta regresiva, icono de bandeja, tema claro/oscuro
+scripts/make-icon.ps1   genera el icono de la app (Assets/VibeDoze.ico)
+docs/                   capturas del README (VibeDoze.exe snapshot)
 src/VibeDoze.Hook/      Ayudante de hooks y watchdog (.NET Framework 4.8, 21 KB)
 ```

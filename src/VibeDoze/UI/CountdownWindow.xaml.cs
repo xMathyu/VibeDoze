@@ -1,54 +1,78 @@
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Media;
 using VibeDoze.Core;
 
 namespace VibeDoze.UI;
 
-/// <summary>"Suspending in 30 s" dialog, shown only when someone may be in front of the screen.</summary>
+/// <summary>"Suspending in 30 s" alert, shown only when someone may be in front of the screen.</summary>
 public partial class CountdownWindow : Window
 {
+    private const double Radius = 39; // ring centre line inside the 84 px box (6 px stroke)
+
     private readonly Engine _engine;
     private readonly PendingAction _pending;
     private readonly double _total;
+    private readonly bool _preview;
 
-    internal CountdownWindow(Engine engine, PendingAction pending)
+    /// <param name="preview">Render only (snapshot): don't follow the engine or close itself.</param>
+    internal CountdownWindow(Engine engine, PendingAction pending, bool preview = false)
     {
         InitializeComponent();
         _engine = engine;
         _pending = pending;
+        _preview = preview;
         _total = Math.Max(1, (pending.ExecuteAtUtc - pending.CreatedUtc).TotalSeconds);
 
         bool thermal = pending.Source == ActionSource.Thermal;
-        var accent = TryFindResource(thermal ? "SystemFillColorCriticalBrush" : "SystemFillColorCautionBrush") as Brush;
-        Halo.Fill = accent;
-        Progress.Foreground = accent;
+        Ring.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, thermal ? "VD.Red" : "VD.Orange");
+        TitleText.Text = (thermal, pending.Action) switch
+        {
+            (true, SystemAction.Hibernate) => "Hibernar por temperatura",
+            (true, SystemAction.Shutdown) => "Apagar por temperatura",
+            (true, _) => "Suspender por temperatura",
+            (_, SystemAction.Hibernate) => "La laptop va a hibernar",
+            (_, SystemAction.Shutdown) => "La laptop se apagará",
+            _ => "La laptop se suspenderá",
+        };
         Reason.Text = pending.Reason;
-        PostponeButton.Visibility = pending.Source == ActionSource.Timer ? Visibility.Visible : Visibility.Collapsed;
+        NowButton.Content = $"{Engine.ActionName(pending.Action)} ahora";
+        bool timer = pending.Source == ActionSource.Timer;
+        PostponeButton.Visibility = timer ? Visibility.Visible : Visibility.Collapsed;
+        CancelButton.Margin = timer ? new Thickness(4, 0, 4, 0) : new Thickness(0, 0, 4, 0);
         CancelButton.Content = thermal ? "Ignorar 15 min" : "Cancelar";
 
-        SourceInitialized += (_, _) =>
+        if (!preview)
         {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int round = Native.DWMWCP_ROUND;
-            Native.DwmSetWindowAttribute(hwnd, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
-        };
-        _engine.Updated += Tick;
-        Closed += (_, _) => _engine.Updated -= Tick;
+            _engine.Updated += Tick;
+            Closed += (_, _) => _engine.Updated -= Tick;
+        }
         Tick();
     }
 
     private void Tick()
     {
-        if (!ReferenceEquals(_engine.Pending, _pending))
+        if (!_preview && !ReferenceEquals(_engine.Pending, _pending))
         {
             Close(); // executed, cancelled or replaced
             return;
         }
         double left = Math.Max(0, (_pending.ExecuteAtUtc - DateTime.UtcNow).TotalSeconds);
         Seconds.Text = ((int)Math.Ceiling(left)).ToString();
-        TitleText.Text = $"{Engine.ActionName(_pending.Action)} en {(int)Math.Ceiling(left)} s";
-        Progress.Value = left / _total;
+        Ring.Data = Arc(Math.Clamp(left / _total, 0, 1));
+    }
+
+    private static Geometry Arc(double fraction)
+    {
+        const double c = 42;
+        if (fraction >= 0.999) return new EllipseGeometry(new Point(c, c), Radius, Radius);
+        double angle = fraction * 2 * Math.PI;
+        var start = new Point(c, c - Radius);
+        var end = new Point(c + Radius * Math.Sin(angle), c - Radius * Math.Cos(angle));
+        var figure = new PathFigure { StartPoint = start, IsClosed = false };
+        figure.Segments.Add(new ArcSegment(end, new Size(Radius, Radius), 0, fraction > 0.5, SweepDirection.Clockwise, true));
+        var geometry = new PathGeometry(new[] { figure });
+        geometry.Freeze();
+        return geometry;
     }
 
     private void OnPostpone(object sender, RoutedEventArgs e) => _engine.PostponeTimer(15);

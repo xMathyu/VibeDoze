@@ -133,6 +133,8 @@ internal sealed class Engine : IDisposable
     public int? BatteryPercent { get; private set; }
     public bool ManualAwake { get; private set; }
     public DateTime? TimerDeadlineUtc { get; private set; }
+    /// <summary>Minutes of the active timer when it was set in this session (to highlight its preset).</summary>
+    public int? TimerMinutes { get; private set; }
     public string? HoldReason { get; private set; }
     public PendingAction? Pending { get; private set; }
     public EngineMode Mode { get; private set; }
@@ -188,6 +190,7 @@ internal sealed class Engine : IDisposable
     public void SetTimer(int minutes)
     {
         TimerDeadlineUtc = DateTime.UtcNow.AddMinutes(minutes);
+        TimerMinutes = minutes;
         _timerWarned = minutes <= 5;
         if (Pending?.Source == ActionSource.Timer) Pending = null;
         RuntimeStateStore.Update(s => s.TimerDeadlineUtc = TimerDeadlineUtc);
@@ -205,6 +208,7 @@ internal sealed class Engine : IDisposable
     {
         if (TimerDeadlineUtc is null) return;
         TimerDeadlineUtc = null;
+        TimerMinutes = null;
         if (Pending?.Source == ActionSource.Timer) Pending = null;
         RuntimeStateStore.Update(s => s.TimerDeadlineUtc = null);
         Log.Info("Límite de tiempo cancelado");

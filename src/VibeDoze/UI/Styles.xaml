@@ -1,88 +1,109 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="clr-namespace:VibeDoze.UI">
 
-    <!-- Cards and text — colours come from the Windows 11 Fluent theme so light/dark follow the system. -->
-    <Style x:Key="Card" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="Padding" Value="14,12" />
-        <Setter Property="Margin" Value="0,0,0,8" />
+    <!-- Colours live in VD.* brushes set by ThemeManager (light / dark, following Windows). -->
+
+    <FontFamily x:Key="VD.Font">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="VD.DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+
+    <!-- ───────── Icons (24×24, stroked unless used with Filled) ───────── -->
+    <Geometry x:Key="G.Terminal">M6 4.5 H18 A3 3 0 0 1 21 7.5 V16.5 A3 3 0 0 1 18 19.5 H6 A3 3 0 0 1 3 16.5 V7.5 A3 3 0 0 1 6 4.5 Z M7.5 10 L10 12 L7.5 14 M12.5 15 H16.5</Geometry>
+    <Geometry x:Key="G.Sparkle">M12 3.5 L13.9 8.1 L18.5 10 L13.9 11.9 L12 16.5 L10.1 11.9 L5.5 10 L10.1 8.1 Z M18.5 16 V20 M16.5 18 H20.5</Geometry>
+    <Geometry x:Key="G.Laptop">M5 6.5 H19 A1 1 0 0 1 20 7.5 V16 H4 V7.5 A1 1 0 0 1 5 6.5 Z M2.5 18.5 H21.5</Geometry>
+    <Geometry x:Key="G.Thermo">M10 14.8 V5 A2 2 0 1 1 14 5 V14.8 A3.5 3.5 0 1 1 10 14.8 Z M12 9 V16</Geometry>
+    <Geometry x:Key="G.Battery">M5 7.5 H17 A2.5 2.5 0 0 1 19.5 10 V14 A2.5 2.5 0 0 1 17 16.5 H5 A2.5 2.5 0 0 1 2.5 14 V10 A2.5 2.5 0 0 1 5 7.5 Z M21.5 10.5 V13.5</Geometry>
+    <Geometry x:Key="G.Sun">M15.5 12 A3.5 3.5 0 1 1 8.5 12 A3.5 3.5 0 1 1 15.5 12 Z M12 3 V5 M12 19 V21 M3 12 H5 M19 12 H21 M5.6 5.6 L7 7 M17 17 L18.4 18.4 M5.6 18.4 L7 17 M17 7 L18.4 5.6</Geometry>
+    <Geometry x:Key="G.Timer">M19.5 13 A7.5 7.5 0 1 1 4.5 13 A7.5 7.5 0 1 1 19.5 13 Z M12 9 V13 L14.5 14.5 M10 2.5 H14</Geometry>
+    <Geometry x:Key="G.Moon">M19 14.5 A7.5 7.5 0 0 1 9.5 5 A7.5 7.5 0 1 0 19 14.5 Z</Geometry>
+    <Geometry x:Key="G.Power">M12 3.5 V11.5 M7.2 6.2 A7.5 7.5 0 1 0 16.8 6.2</Geometry>
+    <Geometry x:Key="G.Sliders">M4 7 H14 M18 7 H20 M4 17 H8 M12 17 H20 M18 7 A2 2 0 1 1 14 7 A2 2 0 1 1 18 7 Z M12 17 A2 2 0 1 1 8 17 A2 2 0 1 1 12 17 Z</Geometry>
+    <Geometry x:Key="G.Link">M10 14 A4 4 0 0 0 15.7 14 L18.7 11 A4 4 0 0 0 13 5.3 L12 6.3 M14 10 A4 4 0 0 0 8.3 10 L5.3 13 A4 4 0 0 0 11 18.7 L12 17.7</Geometry>
+    <Geometry x:Key="G.Update">M20.5 12 A8.5 8.5 0 1 1 3.5 12 A8.5 8.5 0 1 1 20.5 12 Z M12 7.5 V15.5 M8.5 12.5 L12 16 L15.5 12.5</Geometry>
+    <Geometry x:Key="G.Check">M5 12.5 L9.5 17 L19 7.5</Geometry>
+    <Geometry x:Key="G.Search">M17.5 11 A6.5 6.5 0 1 1 4.5 11 A6.5 6.5 0 1 1 17.5 11 Z M16 16 L20 20</Geometry>
+    <Geometry x:Key="G.Dots">M7.8 12 A1.8 1.8 0 1 1 4.2 12 A1.8 1.8 0 1 1 7.8 12 Z M13.8 12 A1.8 1.8 0 1 1 10.2 12 A1.8 1.8 0 1 1 13.8 12 Z M19.8 12 A1.8 1.8 0 1 1 16.2 12 A1.8 1.8 0 1 1 19.8 12 Z</Geometry>
+    <Geometry x:Key="G.Doc">M7 3.5 H13.5 L18 8 V18.5 A2 2 0 0 1 16 20.5 H7 A2 2 0 0 1 5 18.5 V5.5 A2 2 0 0 1 7 3.5 Z M13.5 3.5 V8 H18 M8.5 12.5 H14.5 M8.5 16 H14.5</Geometry>
+
+    <!-- ───────── Text ───────── -->
+    <Style x:Key="VD.Caption" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource VD.Sub}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-
-    <Style x:Key="SectionTitle" TargetType="TextBlock">
+    <Style x:Key="VD.RowTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{DynamicResource VD.Text}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="VD.GroupTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="Margin" Value="2,8,0,6" />
+        <Setter Property="Foreground" Value="{DynamicResource VD.Sub}" />
+        <Setter Property="Margin" Value="4,0,0,8" />
     </Style>
 
-    <Style x:Key="RowTitle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="TextWrapping" Value="Wrap" />
+    <!-- ───────── Surfaces ───────── -->
+    <Style x:Key="VD.ModuleCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource VD.Module}" />
+        <Setter Property="CornerRadius" Value="18" />
+    </Style>
+    <Style x:Key="VD.GroupCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource VD.Group}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VD.GroupBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="14,0" />
+    </Style>
+    <!-- One row of a grouped list; rows after the first get a hairline on top (VD.RowNext). -->
+    <Style x:Key="VD.Row" TargetType="Border">
+        <Setter Property="MinHeight" Value="50" />
+        <Setter Property="Padding" Value="0,8" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VD.Sep}" />
+    </Style>
+    <Style x:Key="VD.RowNext" TargetType="Border" BasedOn="{StaticResource VD.Row}">
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style x:Key="VD.Chip" TargetType="Border">
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Background" Value="{DynamicResource VD.Fill}" />
+        <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+    <Style x:Key="VD.IconTile" TargetType="Border">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style x:Key="Secondary" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-        <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-
-    <Style x:Key="Tertiary" TargetType="TextBlock" BasedOn="{StaticResource Secondary}">
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-    </Style>
-
-    <Style x:Key="Divider" TargetType="Border">
-        <Setter Property="Height" Value="1" />
-        <Setter Property="Background" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
-        <Setter Property="Margin" Value="0,10" />
-    </Style>
-
-    <!-- On/off switch (WPF has no ToggleSwitch control). -->
-    <Style x:Key="ToggleSwitch" TargetType="CheckBox">
+    <!-- ───────── iOS-style switch ───────── -->
+    <Style x:Key="VD.Switch" TargetType="CheckBox">
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <Grid Background="Transparent" Width="44" Height="24">
-                        <Border x:Name="Track" Width="40" Height="20" CornerRadius="10" BorderThickness="1"
-                                Background="{DynamicResource ControlAltFillColorSecondaryBrush}"
-                                BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
-                        <Ellipse x:Name="Knob" Width="12" Height="12" HorizontalAlignment="Left" Margin="8,0,0,0"
-                                 Fill="{DynamicResource ControlStrongFillColorDefaultBrush}">
-                            <Ellipse.RenderTransform>
-                                <TranslateTransform x:Name="Shift" X="0" />
-                            </Ellipse.RenderTransform>
+                    <Grid Width="44" Height="26" Background="Transparent">
+                        <Border x:Name="Track" CornerRadius="13" Background="{DynamicResource VD.SwitchOff}" />
+                        <Ellipse x:Name="Knob" Width="22" Height="22" Fill="White" HorizontalAlignment="Left" Margin="2,0">
+                            <Ellipse.Effect>
+                                <DropShadowEffect BlurRadius="4" ShadowDepth="1" Direction="270" Opacity="0.25" />
+                            </Ellipse.Effect>
                         </Ellipse>
+                        <Border x:Name="Focus" CornerRadius="16" Margin="-3" BorderThickness="2"
+                                BorderBrush="{DynamicResource VD.Accent}" Visibility="Collapsed" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                            <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                            <Trigger.EnterActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Shift" Storyboard.TargetProperty="X" To="20" Duration="0:0:0.12" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </Trigger.EnterActions>
-                            <Trigger.ExitActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="Shift" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.12" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </Trigger.ExitActions>
+                            <Setter TargetName="Track" Property="Background" Value="{DynamicResource VD.Accent}" />
+                            <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right" />
                         </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Knob" Property="Width" Value="14" />
-                            <Setter TargetName="Knob" Property="Height" Value="14" />
-                            <Setter TargetName="Knob" Property="Margin" Value="7,0,0,0" />
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4" />
@@ -93,50 +114,141 @@
         </Setter>
     </Style>
 
-    <!-- Pill buttons for timer presets. -->
-    <Style x:Key="Chip" TargetType="Button">
+    <!-- ───────── Control Center tile: icon circle + two lines; Tag = icon geometry ───────── -->
+    <Style x:Key="VD.Tile" TargetType="ToggleButton">
+        <Setter Property="Foreground" Value="{DynamicResource VD.Text}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
-        <Setter Property="Margin" Value="0,0,6,6" />
-        <Setter Property="Padding" Value="12,5" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bg" CornerRadius="14" BorderThickness="1" Padding="{TemplateBinding Padding}"
-                            Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}">
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bg" Background="{DynamicResource VD.Module}" CornerRadius="18" Padding="12,10"
+                            BorderThickness="1.5" BorderBrush="Transparent">
+                        <DockPanel>
+                            <Border x:Name="Circle" DockPanel.Dock="Left" Width="36" Height="36" CornerRadius="18"
+                                    Background="{DynamicResource VD.Fill}" VerticalAlignment="Center">
+                                <ui:GlyphIcon x:Name="Glyph" Width="19" Height="19" Foreground="{DynamicResource VD.Text}"
+                                              Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                            </Border>
+                            <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Circle" Property="Background" Value="{DynamicResource VD.Accent}" />
+                            <Setter TargetName="Glyph" Property="Foreground" Value="White" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource VD.ModuleHover}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource VD.Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ───────── Segmented control item ───────── -->
+    <Style x:Key="VD.Segment" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource VD.Text}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bg" CornerRadius="8" Height="30" Background="Transparent" BorderThickness="1.5" BorderBrush="Transparent">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource VD.FillHover}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource VD.SegOn}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource VD.Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ───────── Buttons ───────── -->
+    <Style x:Key="VD.Capsule" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource VD.Text}" />
+        <Setter Property="Background" Value="{DynamicResource VD.Module}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="18" Padding="{TemplateBinding Padding}"
+                            BorderThickness="1.5" BorderBrush="Transparent">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.86" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource ControlFillColorTertiaryBrush}" />
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.72" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource VD.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
-
-    <Style x:Key="ChipActive" TargetType="Button" BasedOn="{StaticResource Chip}">
-        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+    <Style x:Key="VD.CapsuleFill" TargetType="Button" BasedOn="{StaticResource VD.Capsule}">
+        <Setter Property="Background" Value="{DynamicResource VD.Fill}" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="14,0" />
+    </Style>
+    <Style x:Key="VD.CapsuleAccent" TargetType="Button" BasedOn="{StaticResource VD.Capsule}">
+        <Setter Property="Background" Value="{DynamicResource VD.Accent}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="VD.IconButton" TargetType="Button" BasedOn="{StaticResource VD.Capsule}">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style x:Key="VD.Link" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource VD.Accent}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bg" CornerRadius="14" BorderThickness="1" Padding="{TemplateBinding Padding}"
-                            Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border x:Name="Bg" Background="Transparent" CornerRadius="8" Padding="8,6" BorderThickness="1.5" BorderBrush="Transparent">
+                        <ContentPresenter VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource VD.AccentSoft}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource VD.Accent}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -144,27 +256,30 @@
         </Setter>
     </Style>
 
-    <!-- Small status pill (lid / temperature / battery). -->
-    <Style x:Key="Pill" TargetType="Border">
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Padding" Value="8,3" />
-        <Setter Property="Margin" Value="0,0,6,0" />
-        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-    </Style>
-
-    <Style x:Key="LinkButton" TargetType="Button">
+    <!-- ───────── Settings sidebar item ───────── -->
+    <Style x:Key="VD.NavItem" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource VD.Text}" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Foreground" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Margin" Value="0,0,0,2" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <TextBlock x:Name="Text" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
-                               Background="Transparent" />
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bg" CornerRadius="8" Height="34" Padding="7,0" Background="Transparent" BorderThickness="1.5" BorderBrush="Transparent">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Text" Property="TextDecorations" Value="Underline" />
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource VD.Fill}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource VD.Accent}" />
+                            <Setter Property="Foreground" Value="White" />
+                            <Setter Property="FontWeight" Value="Medium" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource VD.Accent}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
