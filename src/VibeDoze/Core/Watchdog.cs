@@ -4,9 +4,9 @@ using Microsoft.Win32.SafeHandles;
 namespace VibeDoze.Core;
 
 /// <summary>
-/// While the lid override is active a tiny second process ("VibeDoze.exe watchdog &lt;pid&gt;") waits for the
-/// main process. If VibeDoze crashes or is killed, the watchdog restores the original lid action so the
-/// laptop never stays on inside a bag because of us.
+/// While the lid or "sleep after" override is active a tiny second process ("VibeDoze.exe watchdog &lt;pid&gt;")
+/// waits for the main process. If VibeDoze crashes or is killed, the watchdog restores the original settings so
+/// the laptop never stays on inside a bag because of us.
 /// </summary>
 internal static class Watchdog
 {

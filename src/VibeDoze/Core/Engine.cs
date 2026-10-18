@@ -381,7 +381,7 @@ internal sealed class Engine : IDisposable
             Log.Info("El usuario volvió (pantalla encendida): se reanuda VibeDoze");
             HoldReason = null;
             _sleepAttemptUtc = null;
-            if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+            if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
         }
 
         // 1) A countdown that reached zero.
@@ -407,13 +407,10 @@ internal sealed class Engine : IDisposable
         }
         if (_batteryHold) want = false;
 
-        // 3) Keep awake + lid override.
-        if (want)
-        {
-            _sleepAttemptUtc = null; // agents are busy again: never escalate an old sleep request
-            if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
-        }
+        // 3) Keep awake ("sleep after: never" too, it replaces an armed sleep) + lid override.
+        if (want) _sleepAttemptUtc = null; // agents are busy again: never escalate an old sleep request
         _power.SetKeepAwake(want, want && Settings.KeepDisplayOn && !LidClosed, PowerReason(busy));
+        SyncIdleSleep(want);
         bool wantOverride = want && Settings.KeepRunningWithLidClosed && PowerController.Capabilities.LidPresent;
         if (wantOverride && !_power.LidOverrideActive)
         {
@@ -520,6 +517,23 @@ internal sealed class Engine : IDisposable
         UpdateHeadline(busy);
     }
 
+    /// <summary>
+    /// On Modern Standby the power request alone doesn't stop standby once "sleep after" expires, so it is set to
+    /// never while we keep the laptop awake, and restored as soon as nothing needs it.
+    /// </summary>
+    private static void SyncIdleSleep(bool want)
+    {
+        if (want && PowerController.Capabilities.ModernStandby)
+        {
+            if (!PowerController.IdleSleepBlocked && !PowerController.BlockIdleSleep() && PowerController.IdleSleepArmed)
+                PowerController.RestoreIdleFromState(); // couldn't block: at least don't leave the 1-min timeout
+        }
+        else if (PowerController.IdleSleepBlocked)
+        {
+            PowerController.RestoreIdleFromState();
+        }
+    }
+
     /// <summary>Someone may be looking: a screen is on (laptop panel, or an external monitor with the lid closed).</summary>
     private bool Interactive => DisplayOn;
 
@@ -569,6 +583,7 @@ internal sealed class Engine : IDisposable
 
         _power.SetKeepAwake(false, false, string.Empty);
         if (_power.LidOverrideActive) _power.RestoreLid();
+        if (PowerController.IdleSleepBlocked) PowerController.RestoreIdleFromState();
 
         if (p.Source is ActionSource.Thermal or ActionSource.Battery)
             RaiseNotify("VibeDoze", $"{p.Reason}. {ActionName(p.Action)} para proteger la laptop.");
@@ -585,7 +600,7 @@ internal sealed class Engine : IDisposable
         bool displayOn = DisplayOn;
         // Shared power state is only touched here, on the UI thread; the worker just triggers the transition.
         bool idleArmed = action == SystemAction.Sleep && PowerController.Capabilities.ModernStandby
-                         && PowerController.ArmIdleSleep(60);
+                         && PowerController.ArmIdleSleep();
         Task.Run(() =>
         {
             try
@@ -742,7 +757,11 @@ internal sealed class Engine : IDisposable
                     var setting = Marshal.PtrToStructure<Native.POWERBROADCAST_SETTING>(lParam);
                     if (setting.PowerSetting == Native.GUID_LIDSWITCH_STATE_CHANGE) OnLid(setting.Data == 0);
                     else if (setting.PowerSetting == Native.GUID_CONSOLE_DISPLAY_STATE) OnDisplay(setting.Data != 0);
-                    else if (setting.PowerSetting == Native.GUID_ACTIVE_POWERSCHEME) _power.EnsureOverrideOnActiveScheme();
+                    else if (setting.PowerSetting == Native.GUID_ACTIVE_POWERSCHEME)
+                    {
+                        _power.EnsureOverrideOnActiveScheme();
+                        if (PowerController.IdleSleepBlocked) PowerController.BlockIdleSleep(); // the new plan must not sleep either
+                    }
                     break;
                 case Native.PBT_APMSUSPEND:
                     _suspendObserved = true;
@@ -780,7 +799,7 @@ internal sealed class Engine : IDisposable
             // The user is back: no pending escalation, no shortened idle timeout, no hold.
             _sleepAttemptUtc = null;
             _slash.Reassert();
-            if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+            if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
             if (HoldReason is not null)
             {
                 Log.Info("El usuario volvió (tapa abierta): se reanuda VibeDoze");
@@ -800,7 +819,7 @@ internal sealed class Engine : IDisposable
             // Someone woke the screen: drop the 60 s idle timeout right away. Leaving the "hold" state waits
             // until the screen has stayed on for a few seconds (see Evaluate), so a blip doesn't count.
             _sleepAttemptUtc = null;
-            if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+            if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
         }
         Refresh();
     }
@@ -809,7 +828,7 @@ internal sealed class Engine : IDisposable
     {
         Log.Info(byUser ? "Reanudado por el usuario" : "Reanudado");
         _slash.Reassert();
-        if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+        if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
         _suspendObserved = true;
         _sleepAttemptUtc = null;
         _hotSinceUtc = null;

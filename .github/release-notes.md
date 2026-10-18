@@ -2,6 +2,7 @@ Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con 
 
 ### Novedades
 
+- **Con la tapa abierta, la laptop ya no se suspende mientras un agente trabaja.** En las laptops con Modern Standby, Windows entraba en reposo al vencer *Suspender tras inactividad* aunque VibeDoze pidiera mantenerla despierta. Ahora ese ajuste queda en *Nunca* mientras trabajan y se restaura al terminar. La pantalla se sigue apagando según tu configuración.
 - **Luz Slash** (laptops ROG con barra Slash, como las Zephyrus G14 y G16 desde 2024): la barra de la tapa es una luz de estado. Mientras usas la laptop queda apagada; con la tapa cerrada muestra si un agente trabaja (una luz que la recorre), necesita tu respuesta (doble parpadeo) o terminó (respiración lenta). Funciona también con batería. Pruébala en *Ajustes → Tapa y energía*; si prefieres ver tu animación de Armoury Crate con la tapa abierta, desactiva *Apagada mientras usas la laptop*.
 - Las sesiones abiertas pero inactivas (por ejemplo, una pestaña de Claude Code en VS Code) ya no aparecen como "Trabajando" cuando los hooks están activos, ni mantienen la laptop despierta.
 

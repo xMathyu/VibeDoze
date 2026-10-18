@@ -239,48 +239,85 @@ internal sealed class PowerController : IDisposable
             Watchdog.Disarm();
     }
 
-    // ───────────── Idle sleep (Modern Standby with the lid closed) ─────────────
+    // ───────────── Idle sleep ("sleep after", Modern Standby) ─────────────
 
     private static readonly Guid SubSleep = new("238c9fa8-0aad-41ed-83f4-97be242c8f20");
     private static readonly Guid StandbyIdle = new("29f6c1db-86da-48c5-9fdb-f2b67b1f44da");
+    private const uint IdleNever = 0;
+    /// <summary>"Sleep after" while waiting for Windows to enter standby by itself (lid closed, agents done).</summary>
+    private const uint ArmedIdleSeconds = 60;
 
     public static bool IdleOverrideActive { get; private set; } = RuntimeStateStore.Load().IdleOverride is not null;
+    /// <summary>"Sleep after: never" is applied because agents are working.</summary>
+    public static bool IdleSleepBlocked { get; private set; }
+    /// <summary>The short "sleep after" is applied: Windows is about to enter standby by itself.</summary>
+    public static bool IdleSleepArmed => IdleOverrideActive && !IdleSleepBlocked;
+
+    /// <summary>
+    /// Modern Standby enters standby when "sleep after" expires even while our power request is active (and on
+    /// battery Windows drops the request 5 min later), so with the lid open the laptop stopped working once the
+    /// screen idled out. While agents work, "sleep after" is set to never on every power plan: the display still
+    /// turns off on its own timeout, but the system keeps running. Also called after a power plan switch.
+    /// </summary>
+    public static bool BlockIdleSleep()
+    {
+        lock (PowerGate)
+        {
+            try
+            {
+                if (IdleSleepBlocked && GetActiveScheme() is { } active
+                    && TryReadIdle(active, out var activeAc, out var activeDc)
+                    && activeAc == IdleNever && activeDc == IdleNever)
+                    return true;
+
+                if (!RuntimeStateStore.TryLoad(out var state)) return false;
+                // Keep what is already saved (an armed timeout, or a crashed run): those are the real originals.
+                var originals = state.IdleOverride ?? s_idleOriginals?.ToList() ?? new List<LidOriginal>();
+                foreach (var scheme in EnumerateSchemes())
+                {
+                    if (originals.Any(o => o.Scheme == scheme)) continue;
+                    if (TryReadIdle(scheme, out var ac, out var dc))
+                        originals.Add(new LidOriginal { Scheme = scheme, Ac = ac, Dc = dc });
+                }
+                if (originals.Count == 0 || !SaveIdleOriginals(originals)) return false;
+
+                foreach (var o in originals)
+                    WriteIdle(o.Scheme, IdleNever, IdleNever);
+                ReapplyActiveScheme();
+                IdleSleepBlocked = true;
+                Log.Info($"Suspensión por inactividad: 'Nunca' aplicado en {originals.Count} plan(es)");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("No se pudo desactivar la suspensión por inactividad", ex);
+                return false;
+            }
+        }
+    }
 
     /// <summary>
     /// Modern Standby laptops have no API to "sleep now" while the screen is already off (lid closed).
     /// The supported way in is the idle timer: shorten "sleep after" so Windows enters standby by itself.
     /// The original values (per plan) are saved first and restored on resume / lid open / exit / crash recovery.
     /// </summary>
-    public static bool ArmIdleSleep(uint seconds)
+    public static bool ArmIdleSleep()
     {
         lock (PowerGate)
         {
             try
             {
-                if (GetActiveScheme() is not { } scheme) return false;
-                var sub = SubSleep;
-                var setting = StandbyIdle;
-                if (Native.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint ac) != 0 ||
-                    Native.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint dc) != 0)
-                    return false;
-
+                if (GetActiveScheme() is not { } scheme || !TryReadIdle(scheme, out var ac, out var dc)) return false;
                 if (!RuntimeStateStore.TryLoad(out var state)) return false;
                 var originals = state.IdleOverride ?? s_idleOriginals?.ToList() ?? new List<LidOriginal>();
                 if (!originals.Any(o => o.Scheme == scheme))
                     originals.Add(new LidOriginal { Scheme = scheme, Ac = ac, Dc = dc });
-                if (!RuntimeStateStore.Update(s => s.IdleOverride = originals))
-                {
-                    Log.Warn("No se pudo guardar la suspensión por inactividad original: no se cambia");
-                    return false;
-                }
-                s_idleOriginals = originals;
-                IdleOverrideActive = true;
-                Watchdog.Arm();
+                if (!SaveIdleOriginals(originals)) return false;
 
-                Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, seconds);
-                Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, seconds);
+                WriteIdle(scheme, ArmedIdleSeconds, ArmedIdleSeconds);
                 ReapplyActiveScheme();
-                Log.Info($"Suspensión por inactividad en {seconds}s (antes: {ac}s enchufada / {dc}s batería)");
+                IdleSleepBlocked = false;
+                Log.Info($"Suspensión por inactividad en {ArmedIdleSeconds}s (antes: {ac}s enchufada / {dc}s batería)");
                 return true;
             }
             catch (Exception ex)
@@ -291,6 +328,23 @@ internal sealed class PowerController : IDisposable
         }
     }
 
+    private static bool SaveIdleOriginals(List<LidOriginal> originals)
+    {
+        if (!RuntimeStateStore.Update(s => s.IdleOverride = originals))
+        {
+            Log.Warn("No se pudo guardar la suspensión por inactividad original: no se cambia");
+            return false;
+        }
+        s_idleOriginals = originals;
+        IdleOverrideActive = true;
+        Watchdog.Arm();
+        return true;
+    }
+
+    /// <summary>
+    /// Restores the "sleep after" values saved in state.json (or kept in memory). Only values that still hold
+    /// what VibeDoze wrote are reverted, so a change the user made meanwhile is kept.
+    /// </summary>
     public static bool RestoreIdleFromState()
     {
         lock (PowerGate)
@@ -301,20 +355,17 @@ internal sealed class PowerController : IDisposable
                 var originals = state.IdleOverride ?? s_idleOriginals;
                 if (originals is null)
                 {
-                    IdleOverrideActive = false;
+                    IdleOverrideActive = IdleSleepBlocked = false;
                     return readable;
                 }
-                var sub = SubSleep;
-                var setting = StandbyIdle;
                 foreach (var o in originals)
                 {
-                    var scheme = o.Scheme;
-                    Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, o.Ac);
-                    Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, o.Dc);
+                    if (!TryReadIdle(o.Scheme, out var ac, out var dc)) continue;
+                    WriteIdle(o.Scheme, IsOurIdleValue(ac) ? o.Ac : ac, IsOurIdleValue(dc) ? o.Dc : dc);
                 }
                 ReapplyActiveScheme();
                 s_idleOriginals = null;
-                IdleOverrideActive = false;
+                IdleOverrideActive = IdleSleepBlocked = false;
                 if (!RuntimeStateStore.Update(s => s.IdleOverride = null))
                     Log.Warn("Suspensión por inactividad restaurada, pero no se pudo actualizar state.json");
                 DisarmWatchdogIfClean();
@@ -383,6 +434,27 @@ internal sealed class PowerController : IDisposable
         uint rcDc = Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, dc);
         if (rcAc != 0 || rcDc != 0)
             Log.Warn($"No se pudo escribir la acción de tapa en {scheme} (AC={rcAc}, DC={rcDc})");
+    }
+
+    private static bool IsOurIdleValue(uint seconds) => seconds is IdleNever or ArmedIdleSeconds;
+
+    private static bool TryReadIdle(Guid scheme, out uint ac, out uint dc)
+    {
+        var sub = SubSleep;
+        var setting = StandbyIdle;
+        dc = 0;
+        return Native.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out ac) == 0
+               && Native.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out dc) == 0;
+    }
+
+    private static void WriteIdle(Guid scheme, uint ac, uint dc)
+    {
+        var sub = SubSleep;
+        var setting = StandbyIdle;
+        uint rcAc = Native.PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, ac);
+        uint rcDc = Native.PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, dc);
+        if (rcAc != 0 || rcDc != 0)
+            Log.Warn($"No se pudo escribir la suspensión por inactividad en {scheme} (AC={rcAc}, DC={rcDc})");
     }
 
     private static void ReapplyActiveScheme()

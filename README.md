@@ -15,6 +15,7 @@ Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains 
 | Función | Detalle |
 |---|---|
 | **Detección de agentes** | Claude Code y Codex, cada uno con su interruptor. Muestra cada sesión con su IDE o terminal, el proyecto y su estado (trabajando, esperando permiso, terminó). |
+| **Tapa abierta** | Mientras un agente trabaja, la pantalla se apaga según tu configuración, pero la laptop no se suspende. Si prefieres que la pantalla siga encendida, activa *Ajustes → Tapa y energía → Mantener la pantalla encendida*. |
 | **Tapa cerrada** | Mientras un agente trabaja, cerrar la tapa no suspende la laptop. Cuando termina (más un margen configurable), la laptop se suspende sola. |
 | **Luz Slash** | En las laptops ROG con barra Slash en la tapa (Zephyrus G14 y G16 desde 2024; en otras laptops no aparece ni toca nada), la barra es una luz de estado: apagada mientras usas la laptop y, con la tapa cerrada, una luz que la recorre mientras un agente trabaja, doble parpadeo si necesita tu respuesta y respiración lenta al terminar. Funciona también con batería. Se prueba en *Ajustes → Tapa y energía → Probar*. Si prefieres tu animación de Armoury Crate con la tapa abierta, desactiva *Apagada mientras usas la laptop*; al salir de VibeDoze también vuelve. |
 | **Límite de tiempo** | 15 min, 30 min, 1 h, 2 h, 4 h, 8 h o un valor personalizado. Al llegar: suspender, hibernar o apagar. Si estás frente a la pantalla, aparece una cuenta regresiva de 60 s con *Posponer 15 min* y *Cancelar*. |
@@ -111,7 +112,9 @@ Notas de los hooks:
 
 Para seguir trabajando con la tapa cerrada, VibeDoze cambia temporalmente la acción *"Al cerrar la tapa"* a *"No hacer nada"* en **todos** tus planes de energía. Así se cubre también el caso en que la app del fabricante cambia de plan (Silent, Turbo…). Lo deshace cuando los agentes terminan.
 
-**Siempre se restaura**, aunque la app se cierre de golpe:
+En las laptops con Modern Standby, mientras un agente trabaja, también pone *"Suspender tras inactividad"* en *"Nunca"* en todos tus planes. En ellas no basta con pedirle a Windows que no suspenda: al vencer ese tiempo entra en reposo igual, aunque la tapa esté abierta, y con batería anula el pedido 5 minutos después. La pantalla se sigue apagando según tu ajuste.
+
+Los dos cambios **siempre se restauran**, aunque la app se cierre de golpe:
 
 - Los valores originales se guardan en `state.json` antes de cambiarlos.
 - Un *watchdog* (unos 15 MB) los restaura si VibeDoze muere.
@@ -161,6 +164,7 @@ VibeDoze.exe snapshot [carpeta] [light|dark]
 ## Solución de problemas
 
 - **La laptop no se suspende al cerrar la tapa, ni siquiera sin agentes.** Revisa *Ajustes → General → Diagnóstico → Al cerrar la tapa, ahora*. Ejecuta `VibeDoze.exe restore-lid`, o restáuralo a mano: `powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1` y `powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1`.
+- **La laptop ya no se suspende sola por inactividad, ni siquiera sin agentes.** Ejecuta `VibeDoze.exe restore-lid`, o revisa el tiempo de suspensión en *Configuración → Sistema → Energía y batería*.
 - **Codex aparece como "detección por CPU" con los hooks instalados.** Aprueba los hooks en Codex (`/hooks`).
 - **¿Qué está haciendo?** Abre el *Registro de actividad* en *Ajustes → General → Diagnóstico*. Con una consola de administrador, `powercfg /requests` muestra `VibeDoze: Claude Code trabajando` mientras la mantiene despierta.
 
