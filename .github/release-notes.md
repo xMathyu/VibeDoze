@@ -1,5 +1,10 @@
 Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con la tapa cerrada, y la duerme sola cuando terminan. Incluye límite de tiempo y protección térmica y de batería.
 
+### Novedades
+
+- **Luz Slash** (ROG Zephyrus G14 y G16 de 2024): con la tapa cerrada, la barra de la tapa muestra si un agente trabaja (una luz que la recorre), espera tu permiso (doble parpadeo) o terminó (respiración lenta). Después vuelve tu animación de Armoury Crate. Pruébala en *Ajustes → Tapa y energía*.
+- Las sesiones abiertas pero inactivas (por ejemplo, una pestaña de Claude Code en VS Code) ya no aparecen como "Trabajando" cuando los hooks están activos, ni mantienen la laptop despierta.
+
 ### Instalación
 
 1. Descarga **VibeDoze.exe** desde *Assets*. Es un único ejecutable que no necesita instalar .NET.

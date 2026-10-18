@@ -37,6 +37,8 @@ internal sealed class AgentProcess
 
     // ── computed by Evaluate ──
     public bool HasHooks => LastHookUtc != DateTime.MinValue;
+    /// <summary>Tracked by hooks (its own, or its kind's are installed and working): CPU isn't read as work.</summary>
+    public bool HookDriven { get; set; }
     public bool Busy { get; set; }
     public DateTime? BusySinceUtc { get; set; }
     public bool Working { get; set; }
@@ -177,7 +179,8 @@ internal sealed class AgentTracker
         if (conv.State == TurnState.Working) conv.LastWorkingUtc = now;
     }
 
-    public void Evaluate(DateTime now, AppSettings settings)
+    /// <param name="hookKinds">Kinds whose hooks are installed and have reported at least once.</param>
+    public void Evaluate(DateTime now, AppSettings settings, IReadOnlySet<AgentKind> hookKinds)
     {
         var stale = TimeSpan.FromMinutes(settings.HookStaleMinutes);
         var hardCap = TimeSpan.FromMinutes(settings.HookHardCapMinutes);
@@ -220,14 +223,18 @@ internal sealed class AgentTracker
                 lastWork = Max(lastWork, conv.LastWorkingUtc);
             }
 
-            if (!p.HasHooks)
+            // With its kind's hooks working, a process that hasn't reported yet (open since before VibeDoze
+            // started) is idle: any turn would fire hooks. Its CPU proves nothing — an idle Claude Code left
+            // open in a VS Code tab keeps using 1–4 % of a core.
+            p.HookDriven = p.HasHooks || hookKinds.Contains(p.Kind);
+            if (!p.HookDriven)
             {
                 // CPU-only detection.
                 working = now - p.LastCpuActiveUtc < TimeSpan.FromSeconds(10);
                 lastWork = Max(lastWork, p.LastCpuActiveUtc);
             }
 
-            int graceMinutes = p.HasHooks
+            int graceMinutes = p.HookDriven
                 ? settings.FinishGraceMinutes
                 : Math.Max(settings.FinishGraceMinutes, settings.CpuOnlyMinGraceMinutes);
             p.Grace = TimeSpan.FromMinutes(graceMinutes);

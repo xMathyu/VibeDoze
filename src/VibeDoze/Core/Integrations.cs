@@ -27,6 +27,9 @@ internal abstract class HookIntegration
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
+    private DateTime? _cachedWriteTime;
+    private IntegrationStatus _cachedStatus;
+
     public abstract string Name { get; }
     public abstract string FilePath { get; }
     /// <summary>hooks.json only holds hooks; settings.json holds everything else of the user's.</summary>
@@ -62,6 +65,26 @@ internal abstract class HookIntegration
             Log.Error($"No se pudo leer {FilePath}", ex);
             return IntegrationStatus.Error;
         }
+    }
+
+    /// <summary>GetStatus for the engine loop: the file is only read again after it changed.</summary>
+    public IntegrationStatus GetCachedStatus()
+    {
+        DateTime writeTime;
+        try
+        {
+            writeTime = File.GetLastWriteTimeUtc(FilePath); // 1601-01-01 if missing
+        }
+        catch
+        {
+            return IntegrationStatus.Error;
+        }
+        if (_cachedWriteTime != writeTime)
+        {
+            _cachedStatus = GetStatus();
+            _cachedWriteTime = writeTime;
+        }
+        return _cachedStatus;
     }
 
     public void Install()

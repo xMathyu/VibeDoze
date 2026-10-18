@@ -267,6 +267,16 @@
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
+                            <Border x:Name="SlashRow" Style="{StaticResource VD.RowNext}">
+                                <DockPanel>
+                                    <CheckBox x:Name="SlashSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Luz Slash con la tapa cerrada" />
+                                    <Button x:Name="SlashPreviewButton" DockPanel.Dock="Right" Content="Probar" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" VerticalAlignment="Center" Click="OnSlashPreview" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Luz Slash con la tapa cerrada" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="La barra de la tapa se anima mientras un agente trabaja, parpadea si espera tu permiso y respira al terminar." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
                             <Border Style="{StaticResource VD.RowNext}">
                                 <DockPanel>
                                     <ComboBox x:Name="LidDoneAction" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />

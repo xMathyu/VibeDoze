@@ -11,6 +11,8 @@ public sealed class RuntimeState
     public List<LidOriginal>? LidOverride { get; set; }
     /// <summary>Original "sleep after" idle timeouts (per plan) while we shorten them to let Modern Standby kick in.</summary>
     public List<LidOriginal>? IdleOverride { get; set; }
+    /// <summary>The Slash lighting while VibeDoze animates it with the lid closed.</summary>
+    public SlashOriginal? Slash { get; set; }
     public DateTime? TimerDeadlineUtc { get; set; }
 }
 

@@ -87,6 +87,10 @@ public partial class SettingsWindow : Window
             OthersSwitch.IsChecked = s.WatchOthers;
             LidSwitch.IsChecked = s.KeepRunningWithLidClosed;
             DisplaySwitch.IsChecked = s.KeepDisplayOn;
+            SlashRow.Visibility = SlashLight.Present ? Visibility.Visible : Visibility.Collapsed;
+            SlashSwitch.IsChecked = s.SlashWhileLidClosed;
+            SlashPreviewButton.IsEnabled = !_engine.SlashPreviewing;
+            SlashPreviewButton.Content = _engine.SlashPreviewing ? "Mira la tapa…" : "Probar";
             ThermalSwitch.IsChecked = s.ThermalGuard;
             ThermalBatterySwitch.IsChecked = s.ThermalOnlyOnBattery;
             BatterySwitch.IsChecked = s.BatteryGuard;
@@ -246,6 +250,7 @@ public partial class SettingsWindow : Window
         s.WatchOthers = OthersSwitch.IsChecked == true;
         s.KeepRunningWithLidClosed = LidSwitch.IsChecked == true;
         s.KeepDisplayOn = DisplaySwitch.IsChecked == true;
+        s.SlashWhileLidClosed = SlashSwitch.IsChecked == true;
         s.ThermalGuard = ThermalSwitch.IsChecked == true;
         s.ThermalOnlyOnBattery = ThermalBatterySwitch.IsChecked == true;
         s.BatteryGuard = BatterySwitch.IsChecked == true;
@@ -259,6 +264,8 @@ public partial class SettingsWindow : Window
         s.ThermalThresholdC = (int)ThresholdSlider.Value;
         _engine.SaveSettings();
     }
+
+    private void OnSlashPreview(object sender, RoutedEventArgs e) => _engine.PreviewSlash();
 
     private void OnStartupClick(object sender, RoutedEventArgs e)
     {

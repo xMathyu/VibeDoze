@@ -228,7 +228,8 @@ internal sealed class PowerController : IDisposable
     {
         bool lid = RestoreLidFromState();
         bool idle = RestoreIdleFromState();
-        return lid && idle;
+        bool slash = SlashLight.RestoreFromState();
+        return lid && idle && slash;
     }
 
     private static void DisarmWatchdogIfClean()

@@ -241,7 +241,7 @@ public partial class MainWindow : Window
         }
 
         string subtitle = a.Project ?? AgentLocation(a);
-        subtitle += a.HasHooks ? " · hooks" : " · CPU";
+        subtitle += a.HookDriven ? " · hooks" : " · CPU";
         return new SessionRow
         {
             Title = $"{AgentRules.DisplayName(a.Kind)} · {a.Host}",

@@ -20,6 +20,8 @@ internal static class Program
                 return Watchdog.Run(args[1..]);
             case "restore-lid":
                 return PowerController.RestoreAllFromState() ? 0 : 1;
+            case "slash-preview":
+                return SlashLight.RunPreview() ? 0 : 1;
             case "install-hooks":
                 return Hooks(install: true, args.Length > 1 ? args[1] : "all");
             case "uninstall-hooks":

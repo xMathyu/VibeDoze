@@ -46,11 +46,14 @@ internal sealed class Engine : IDisposable
     private static readonly TimeSpan SleepEscalation = TimeSpan.FromSeconds(150);
 
     private readonly PowerController _power = new();
+    private readonly SlashLight _slash = new();
     private readonly AgentScanner _scanner = new();
     private readonly AgentTracker _tracker = new();
     private readonly ThermalMonitor _thermal = new();
     private readonly HookServer _hookServer;
     private readonly ConcurrentQueue<HookMessage> _inbox = new();
+    /// <summary>Agent kinds whose hooks are installed and have reported at least once.</summary>
+    private readonly HashSet<AgentKind> _hookKinds = new();
     private readonly DispatcherTimer _timer;
     private readonly HwndSource _window;
     private readonly List<IntPtr> _powerNotifications = new();
@@ -69,6 +72,7 @@ internal sealed class Engine : IDisposable
     private PendingAction? _shownPending;
     /// <summary>Windows is shutting down / logging off: settings are restored and must not be re-applied.</summary>
     private DateTime _sessionEndingUntilUtc = DateTime.MinValue;
+    private DateTime? _slashPreviewStartUtc;
 
     public Engine()
     {
@@ -76,7 +80,7 @@ internal sealed class Engine : IDisposable
 
         // Crash recovery: a previous run may have left the lid override applied.
         var state = RuntimeStateStore.Load();
-        if (state.LidOverride is not null || state.IdleOverride is not null)
+        if (state.LidOverride is not null || state.IdleOverride is not null || state.Slash is not null)
         {
             Log.Warn("Se encontró un ajuste de energía sin restaurar (cierre inesperado); restaurando");
             PowerController.RestoreAllFromState();
@@ -148,6 +152,8 @@ internal sealed class Engine : IDisposable
         _tracker.Processes.OrderByDescending(a => a.Busy).ThenBy(a => a.Kind).ThenBy(a => a.Pid).ToList();
 
     public bool HookSeen(AgentKind kind) => _tracker.LastHookByKind.ContainsKey(kind);
+
+    public bool SlashPreviewing => _slashPreviewStartUtc is not null;
 
     /// <summary>
     /// Nothing would be lost by restarting the app (to install an update): no agent working, nothing applied
@@ -245,6 +251,13 @@ internal sealed class Engine : IDisposable
     public void SleepNow() =>
         StartAction(SystemAction.Sleep, ActionSource.Manual, "Suspendida desde VibeDoze", DateTime.UtcNow);
 
+    /// <summary>Plays each Slash pattern once with the lid open (Ajustes › Tapa › Probar).</summary>
+    public void PreviewSlash()
+    {
+        _slashPreviewStartUtc = DateTime.UtcNow;
+        Refresh();
+    }
+
     /// <summary>Leave the "on hold" state (after an automatic sleep) without waiting for the lid to open.</summary>
     public void ResumeFromHold()
     {
@@ -256,7 +269,9 @@ internal sealed class Engine : IDisposable
     public void Refresh()
     {
         if (_disposed) return;
-        Evaluate(DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+        Evaluate(now);
+        UpdateSlash(now);
         Updated?.Invoke();
     }
 
@@ -276,8 +291,9 @@ internal sealed class Engine : IDisposable
             _tick++;
 
             ReadBattery();
-            _tracker.Evaluate(now, Settings);
+            _tracker.Evaluate(now, Settings, _hookKinds);
             Evaluate(now);
+            UpdateSlash(now);
         }
         catch (Exception ex)
         {
@@ -305,9 +321,41 @@ internal sealed class Engine : IDisposable
     private void Scan(DateTime now)
     {
         var others = Settings.WatchOthers ? AgentRules.ParseOthers(Settings.OtherAgents) : Array.Empty<string>();
+        RefreshHookKinds();
         var samples = _scanner.Scan(others, _tracker.Pinned, out var aliases);
         if (samples is null) return; // process snapshot failed: keep the last known agents
         _tracker.ApplyScan(samples, aliases, Settings.CpuActiveThresholdPercent, now);
+    }
+
+    private void RefreshHookKinds()
+    {
+        Check(AgentKind.Claude, ClaudeHooks, Settings.ClaudeHooksVerified);
+        Check(AgentKind.Codex, CodexHooks, Settings.CodexHooksVerified);
+
+        void Check(AgentKind kind, HookIntegration hooks, bool verified)
+        {
+            var status = hooks.GetCachedStatus();
+            if (status == IntegrationStatus.Error) return; // unreadable right now (being rewritten?): keep what we knew
+            if (verified && status == IntegrationStatus.Installed) _hookKinds.Add(kind);
+            else _hookKinds.Remove(kind);
+        }
+    }
+
+    private void UpdateSlash(DateTime now) => _slash.Show(SlashTarget(now));
+
+    /// <summary>The Slash only lights up while we keep the laptop working with the lid closed (or for the preview).</summary>
+    private SlashPattern SlashTarget(DateTime now)
+    {
+        if (_slashPreviewStartUtc is { } start)
+        {
+            var preview = SlashLight.PreviewPattern(now - start);
+            if (preview != SlashPattern.Off) return preview;
+            _slashPreviewStartUtc = null;
+        }
+        if (!Settings.SlashWhileLidClosed || !LidClosed || !_power.LidOverrideActive) return SlashPattern.Off;
+        var busy = _tracker.Processes.Where(a => a.Busy && IsWatched(a.Kind)).ToList();
+        if (busy.Any(a => a.Working)) return SlashPattern.Working;
+        return busy.Any(a => a.Waiting) ? SlashPattern.Waiting : SlashPattern.Resting; // finished (grace) or manual mode
     }
 
     private void ReadBattery()
@@ -521,6 +569,7 @@ internal sealed class Engine : IDisposable
         if (p.Source is ActionSource.Thermal or ActionSource.Battery)
             RaiseNotify("VibeDoze", $"{p.Reason}. {ActionName(p.Action)} para proteger la laptop.");
         Log.Info($"Ejecutando: {ActionName(p.Action)} — {p.Reason}");
+        _slash.Release(TimeSpan.FromSeconds(1)); // the user's lighting (and its sleep animation) before suspending
         RunPowerAction(p.Action);
     }
 
@@ -656,6 +705,7 @@ internal sealed class Engine : IDisposable
         _sessionEndingUntilUtc = DateTime.UtcNow.AddMinutes(2);
         if (_power.LidOverrideActive) _power.RestoreLid();
         if (PowerController.IdleOverrideActive) PowerController.RestoreIdleFromState();
+        _slash.Release(TimeSpan.FromSeconds(1));
         Log.Info("Windows cierra la sesión: ajustes de energía restaurados");
     }
 
@@ -694,6 +744,7 @@ internal sealed class Engine : IDisposable
                     _suspendObserved = true;
                     _sleepAttemptUtc = null;
                     Log.Info("Sistema entrando en suspensión");
+                    _slash.Release(TimeSpan.FromMilliseconds(500));
                     break;
                 case Native.PBT_APMRESUMEAUTOMATIC:
                     OnResume(byUser: false);
@@ -774,6 +825,7 @@ internal sealed class Engine : IDisposable
         _hookServer.Dispose();
         foreach (var h in _powerNotifications) Native.UnregisterPowerSettingNotification(h);
         if (_suspendNotification != IntPtr.Zero) Native.UnregisterSuspendResumeNotification(_suspendNotification);
+        _slash.Dispose();
         _power.Dispose();
         _thermal.Dispose();
         _window.Dispose();
