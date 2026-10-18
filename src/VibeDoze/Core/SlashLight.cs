@@ -26,7 +26,7 @@ public sealed class SlashOriginal
     public byte[] Options { get; set; } = Array.Empty<byte>();
     /// <summary>Record AC: custom frames.</summary>
     public byte[] Custom { get; set; } = Array.Empty<byte>();
-    /// <summary>"Stay lit" flags that were off and that VibeDoze switched on.</summary>
+    /// <summary>"Stay lit" flags the user has off (all of them are on while VibeDoze animates).</summary>
     public List<SlashFlag> FlagsSwitchedOn { get; set; } = new();
 }
 
@@ -209,7 +209,8 @@ internal sealed class SlashLight : IDisposable
         }
 
         if (original.Options.Length > 7 && original.Options[7] != 0) level = original.Options[7]; // the user's brightness
-        foreach (var flag in original.FlagsSwitchedOn) hid.Set(FlagCommand(flag, on: true));
+        // All of them, like G-Helper before any change: on battery the bar stays dark otherwise.
+        foreach (var flag in Enum.GetValues<SlashFlag>()) hid.Set(FlagCommand(flag, on: true));
         hid.Set(0xD2, 0x02, 0x01, 0x08, 0xAC);
         hid.Set(0xD3, 0x03, 0x01, 0x08, 0xAC, 0xFF, 0xFF, 0x01, 0x05, 0xFF, 0xFF);
         hid.Set(0xD4, 0x00, 0x00, 0x01, 0xAC);
@@ -268,7 +269,7 @@ internal sealed class SlashLight : IDisposable
         }
         if (o.Options.Length == 10) hid.Set([0xD3, 0x03, .. o.Options]);
         hid.Set(0xD4, 0x00, 0x00, 0x01, 0xAB);
-        foreach (var flag in o.FlagsSwitchedOn) hid.Set(FlagCommand(flag, on: false));
+        foreach (var flag in Enum.GetValues<SlashFlag>()) hid.Set(FlagCommand(flag, on: !o.FlagsSwitchedOn.Contains(flag)));
     }
 
     private static byte[] FlagCommand(SlashFlag flag, bool on)
@@ -284,7 +285,7 @@ internal sealed class SlashLight : IDisposable
 
     /// <summary>
     /// These flags can be written but not read back, so take them from Armoury Crate's own record.
-    /// Unknown "stay lit with the lid closed" is assumed off (the factory default); the others are left alone.
+    /// Unknown values are the factory defaults: off with the lid closed, on with battery, master on.
     /// </summary>
     private static List<SlashFlag> FlagsToSwitchOn()
     {
