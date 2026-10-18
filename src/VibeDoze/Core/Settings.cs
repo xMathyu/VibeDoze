@@ -15,6 +15,10 @@ public sealed class AppSettings
     // ── General ──
     public bool Enabled { get; set; } = true;
     public bool ShowNotifications { get; set; } = true;
+    /// <summary>Check GitHub Releases, download new versions and install them when no agent is working.</summary>
+    public bool AutoUpdate { get; set; } = true;
+    /// <summary>"owner/repo" whose GitHub Releases provide updates.</summary>
+    public string UpdateRepository { get; set; } = "xMathyu/VibeDoze";
 
     // ── Agents ──
     public bool WatchClaude { get; set; } = true;
@@ -113,6 +117,8 @@ internal static class SettingsStore
         s.HookStaleMinutes = Math.Clamp(s.HookStaleMinutes, 2, 240);
         s.HookHardCapMinutes = Math.Clamp(s.HookHardCapMinutes, 10, 480);
         s.OtherAgents ??= string.Empty;
+        if (string.IsNullOrWhiteSpace(s.UpdateRepository) || s.UpdateRepository.Count(c => c == '/') != 1)
+            s.UpdateRepository = "xMathyu/VibeDoze";
         return s;
     }
 

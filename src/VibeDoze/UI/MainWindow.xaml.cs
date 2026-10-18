@@ -127,6 +127,7 @@ public partial class MainWindow : Window
             ThermalBatterySwitch.IsChecked = s.ThermalOnlyOnBattery;
             BatterySwitch.IsChecked = s.BatteryGuard;
             NotifySwitch.IsChecked = s.ShowNotifications;
+            AutoUpdateSwitch.IsChecked = s.AutoUpdate;
             StartupSwitch.IsChecked = StartupManager.IsEnabled();
 
             Select(LidDoneAction, s.LidClosedDoneAction);
@@ -145,6 +146,7 @@ public partial class MainWindow : Window
             RenderTimer();
             RenderThermal();
             RenderIntegrations();
+            RenderUpdates();
 
             var caps = PowerController.Capabilities;
             FooterInfo.Text = $"VibeDoze {AppVersion} · Acción de la tapa ahora: {PowerController.DescribeCurrentLidAction()}"
@@ -341,6 +343,34 @@ public partial class MainWindow : Window
         if (_integrationMessage is not null) CodexHookStatus.Text = _integrationMessage;
     }
 
+    private void RenderUpdates()
+    {
+        var u = _app.Updater;
+        if (u is null) return;
+        string latest = u.LatestVersion is { } v ? $"v{v}" : "la versión nueva";
+        string checkedAgo = u.LastCheckUtc is { } t ? $" · revisado {Format.Since(t)}" : string.Empty;
+        UpdateStatusText.Text = u.Status switch
+        {
+            UpdateStatus.Checking => "Buscando actualizaciones…",
+            UpdateStatus.Downloading => $"Descargando {latest}… {u.DownloadPercent ?? 0} %",
+            UpdateStatus.Ready when _engine.Settings.AutoUpdate =>
+                $"{latest} lista · se instala sola cuando ningún agente esté trabajando",
+            UpdateStatus.Ready => $"{latest} lista para instalar",
+            UpdateStatus.Available => $"Hay una versión nueva: {latest}",
+            UpdateStatus.UpToDate => $"Tienes la última versión (v{Updater.CurrentVersion}){checkedAgo}",
+            UpdateStatus.Error => $"No se pudo actualizar: {u.Error}",
+            _ => $"Versión actual v{Updater.CurrentVersion} · revisa GitHub cada 6 h",
+        };
+        UpdateButton.Content = u.Status == UpdateStatus.Ready ? $"Actualizar a {latest} ahora" : "Buscar actualizaciones";
+        UpdateButton.IsEnabled = !u.Busy;
+    }
+
+    private void OnUpdateClick(object sender, RoutedEventArgs e)
+    {
+        if (_app.Updater?.Status == UpdateStatus.Ready) _app.InstallUpdate();
+        else _app.CheckForUpdates();
+    }
+
     // ───────────── Input ─────────────
 
     private void OnSettingClick(object sender, RoutedEventArgs e) => Commit();
@@ -360,6 +390,7 @@ public partial class MainWindow : Window
         s.ThermalOnlyOnBattery = ThermalBatterySwitch.IsChecked == true;
         s.BatteryGuard = BatterySwitch.IsChecked == true;
         s.ShowNotifications = NotifySwitch.IsChecked == true;
+        s.AutoUpdate = AutoUpdateSwitch.IsChecked == true;
         s.LidClosedDoneAction = Selected(LidDoneAction, s.LidClosedDoneAction);
         s.TimerAction = Selected(TimerAction, s.TimerAction);
         s.ThermalAction = Selected(ThermalAction, s.ThermalAction);

@@ -29,7 +29,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $hash = (Get-FileHash dist/VibeDoze.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  VibeDoze.exe" | Set-Content -NoNewline dist/VibeDoze.exe.sha256
-          "{0:N1} MB  sha256 {1}" -f ((Get-Item dist/VibeDoze.exe).Length / 1MB), $hash
+          # Smaller download for the in-app updater (it verifies the extracted exe against VibeDoze.exe.sha256).
+          Compress-Archive -Path dist/VibeDoze.exe -DestinationPath dist/VibeDoze.zip -CompressionLevel Optimal
+          "exe {0:N1} MB · zip {1:N1} MB · sha256 {2}" -f ((Get-Item dist/VibeDoze.exe).Length / 1MB), ((Get-Item dist/VibeDoze.zip).Length / 1MB), $hash
 
       - name: Publish GitHub release
         if: github.ref_type == 'tag'
@@ -42,4 +44,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title "VibeDoze $tag" --notes-file .github/release-notes.md
           }
-          gh release upload $tag dist/VibeDoze.exe dist/VibeDoze.exe.sha256 --clobber
+          gh release upload $tag dist/VibeDoze.exe dist/VibeDoze.exe.sha256 dist/VibeDoze.zip --clobber

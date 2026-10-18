@@ -7,24 +7,36 @@ namespace VibeDoze;
 
 public partial class App : Application
 {
+    private static readonly TimeSpan FirstUpdateCheck = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(6);
+    /// <summary>The app must have been quiet (no agent working, nothing applied) this long before an update restarts it.</summary>
+    private static readonly TimeSpan QuietBeforeUpdate = TimeSpan.FromMinutes(2);
+
     private readonly bool _startHidden;
+    private readonly string[] _args;
     private readonly EventWaitHandle _showRequests;
+    private readonly DateTime _startedUtc = DateTime.UtcNow;
     private RegisteredWaitHandle? _showWait;
     private RegisteredWaitHandle? _quitWait;
     private EventWaitHandle? _quitRequests;
     private Engine? _engine;
+    private Updater? _updater;
+    private DispatcherTimer? _updateTimer;
+    private DateTime? _quietSinceUtc;
     private TrayIcon? _tray;
     private MainWindow? _panel;
     private CountdownWindow? _countdown;
     private bool _quitting;
 
-    internal App(bool startHidden, EventWaitHandle showRequests)
+    internal App(bool startHidden, EventWaitHandle showRequests, string[] args)
     {
         _startHidden = startHidden;
         _showRequests = showRequests;
+        _args = args;
     }
 
     internal bool IsQuitting => _quitting;
+    internal Updater? Updater => _updater;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -37,6 +49,7 @@ public partial class App : Application
         };
 
         _engine = new Engine();
+        _updater = new Updater(_engine.Settings);
         _engine.ActionPending += ShowCountdown;
         _tray = new TrayIcon(_engine, this);
         _engine.Notify += (title, message) => _tray.ShowBalloon(title, message);
@@ -48,6 +61,20 @@ public partial class App : Application
         _quitWait = ThreadPool.RegisterWaitForSingleObject(_quitRequests,
             (_, _) => Dispatcher.BeginInvoke(Quit), null, Timeout.Infinite, executeOnlyOnce: true);
 
+        _updateTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(30) };
+        _updateTimer.Tick += (_, _) => UpdateTick();
+        _updateTimer.Start();
+
+        if (_args.Contains("--updated", StringComparer.OrdinalIgnoreCase))
+        {
+            Log.Info($"Actualizado a la versión {Updater.CurrentVersion}");
+            _tray.ShowBalloon("VibeDoze se actualizó", $"Ahora tienes la versión {Updater.CurrentVersion}.");
+        }
+        else if (_args.Contains("--update-failed", StringComparer.OrdinalIgnoreCase))
+        {
+            _tray.ShowBalloon("VibeDoze", "No se pudo instalar la actualización; sigues con la versión anterior.");
+        }
+
         bool firstRun = !_engine.Settings.FirstRunDone;
         if (firstRun)
         {
@@ -55,6 +82,44 @@ public partial class App : Application
             _engine.SaveSettings();
         }
         if (!_startHidden || firstRun) ShowPanel();
+    }
+
+    /// <summary>Checks GitHub now and then; installs a downloaded update once the app has been quiet for a while.</summary>
+    private void UpdateTick()
+    {
+        if (_engine is null || _updater is null || _quitting || !_engine.Settings.AutoUpdate) return;
+        var now = DateTime.UtcNow;
+
+        bool due = _updater.LastCheckUtc is { } last
+            ? now - last > UpdateCheckInterval
+            : now - _startedUtc > FirstUpdateCheck;
+        if (due && !_updater.Busy) _ = _updater.CheckAsync(download: true);
+
+        if (_updater.Status == UpdateStatus.Ready && _engine.CanRestartSafely)
+        {
+            _quietSinceUtc ??= now;
+            if (now - _quietSinceUtc > QuietBeforeUpdate) InstallUpdate();
+        }
+        else
+        {
+            _quietSinceUtc = null;
+        }
+    }
+
+    internal void CheckForUpdates() => _ = _updater?.CheckAsync(download: true);
+
+    internal void InstallUpdate()
+    {
+        if (_updater is null || _quitting) return;
+        if (_updater.TryStartInstall(out var error))
+        {
+            Quit(); // restores everything; VibeDoze.Hook.exe swaps the exe and starts the new version
+        }
+        else
+        {
+            Log.Warn($"No se pudo instalar la actualización: {error}");
+            _tray?.ShowBalloon("VibeDoze", $"No se pudo instalar la actualización: {error}");
+        }
     }
 
     internal void ShowPanel()
@@ -90,6 +155,7 @@ public partial class App : Application
     {
         if (_quitting) return;
         _quitting = true;
+        _updateTimer?.Stop();
         _countdown?.Close();
         _panel?.Close();
         _tray?.Dispose();

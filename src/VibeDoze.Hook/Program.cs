@@ -19,6 +19,7 @@ namespace VibeDoze.Hook
         private static int Main(string[] args)
         {
             if (args.Length >= 3 && args[0] == "watchdog") return Watchdog(args[1], args[2]);
+            if (args.Length >= 4 && args[0] == "update") return Update(args[1], args[2], args[3]);
             try
             {
                 string agent = args.Length > 0 ? args[0].ToLowerInvariant() : "claude";
@@ -97,6 +98,85 @@ namespace VibeDoze.Hook
                 return 1;
             }
             return 0;
+        }
+
+        /// <summary>
+        /// "VibeDoze.Hook.exe update &lt;pid&gt; &lt;newExe&gt; &lt;targetExe&gt;" — waits for VibeDoze to exit, swaps in the
+        /// downloaded (already verified) exe keeping a backup until the swap succeeded, then starts VibeDoze again.
+        /// If anything fails the previous exe stays in place and is started instead.
+        /// </summary>
+        private static int Update(string pidText, string source, string target)
+        {
+            try
+            {
+                using (var old = System.Diagnostics.Process.GetProcessById(int.Parse(pidText)))
+                    old.WaitForExit(60000);
+            }
+            catch
+            {
+                // already exited
+            }
+
+            string staged = target + ".new";
+            string backup = target + ".bak";
+            bool updated = false;
+            for (int attempt = 0; attempt < 40 && !updated; attempt++)
+            {
+                try
+                {
+                    File.Copy(source, staged, true);       // a failed copy never touches the current exe
+                    if (File.Exists(backup)) File.Delete(backup);
+                    File.Move(target, backup);
+                    try
+                    {
+                        File.Move(staged, target);
+                    }
+                    catch
+                    {
+                        File.Move(backup, target);       // put the old one back
+                        throw;
+                    }
+                    updated = true;
+                }
+                catch
+                {
+                    Thread.Sleep(500);                   // antivirus scan / file still locked
+                }
+            }
+
+            if (updated)
+            {
+                TryDelete(backup);
+                TryDelete(source);
+            }
+            else if (!File.Exists(target) && File.Exists(backup))
+            {
+                try { File.Move(backup, target); } catch { /* nothing else we can do */ }
+            }
+            TryDelete(staged);
+
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target,
+                    updated ? "--background --updated" : "--background --update-failed") { UseShellExecute = false });
+            }
+            catch
+            {
+                return 1;
+            }
+            return updated ? 0 : 1;
+        }
+
+        private static void TryDelete(string path)
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch
+            {
+                // best effort
+            }
         }
 
         private static string ReadStdin()

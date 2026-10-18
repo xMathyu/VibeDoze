@@ -111,6 +111,8 @@ internal sealed class TrayIcon : IDisposable
         items.Add(new WinForms.ToolStripSeparator());
 
         items.Add(Item("Abrir VibeDoze", _app.ShowPanel, bold: true));
+        if (_app.Updater is { Status: UpdateStatus.Ready, LatestVersion: { } latest })
+            items.Add(Item($"Actualizar a v{latest}", _app.InstallUpdate));
         if (_engine.HoldReason is not null) items.Add(Item("Reanudar ahora", _engine.ResumeFromHold));
         items.Add(new WinForms.ToolStripSeparator());
 

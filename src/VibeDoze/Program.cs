@@ -44,7 +44,7 @@ internal static class Program
         }
 
         using var showRequests = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEvent);
-        var app = new App(startHidden: args.Contains("--background", StringComparer.OrdinalIgnoreCase), showRequests);
+        var app = new App(startHidden: args.Contains("--background", StringComparer.OrdinalIgnoreCase), showRequests, args);
         app.InitializeComponent();
         return app.Run();
     }

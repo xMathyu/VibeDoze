@@ -147,6 +147,15 @@ internal sealed class Engine : IDisposable
 
     public bool HookSeen(AgentKind kind) => _tracker.LastHookByKind.ContainsKey(kind);
 
+    /// <summary>
+    /// Nothing would be lost by restarting the app (to install an update): no agent working, nothing applied
+    /// to the power settings, no countdown and not waiting for the user after an automatic sleep.
+    /// </summary>
+    public bool CanRestartSafely =>
+        !_power.KeepingAwake && !_power.LidOverrideActive && !PowerController.IdleOverrideActive
+        && Pending is null && HoldReason is null && _sleepAttemptUtc is null
+        && !_tracker.Processes.Any(a => a.Busy);
+
     public bool IsWatched(AgentKind kind) => kind switch
     {
         AgentKind.Claude => Settings.WatchClaude,

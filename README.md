@@ -25,6 +25,24 @@ Es un único ejecutable autocontenido: no hay que instalar .NET ni tener permiso
 2. El ejecutable no está firmado, así que Windows SmartScreen puede advertir. Elige *Más información → Ejecutar de todas formas*.
 3. En el panel activa **Iniciar con Windows** y, en **Detección precisa (hooks)**, pulsa **Activar** para Claude Code y Codex.
 
+### Actualizaciones automáticas
+
+VibeDoze revisa las [Releases](https://github.com/xMathyu/VibeDoze/releases) de este repo a los 2 minutos de iniciar y luego cada 6 horas.
+
+- Si hay una versión nueva, la descarga en segundo plano (`VibeDoze.zip`, más liviano) y verifica el `.exe` contra `VibeDoze.exe.sha256`. Si no coincide, la descarta.
+- La instala sola cuando lleva 2 minutos sin agentes trabajando y sin cambios aplicados a la tapa. Así nunca reinicia en medio de una sesión.
+- El reemplazo lo hace `VibeDoze.Hook.exe` cuando VibeDoze ya se cerró. Si algo falla, deja el ejecutable anterior y lo vuelve a abrir.
+- Desde el panel puedes buscar o instalar al momento, o desactivar la opción *Actualizar automáticamente*. El repositorio de origen se cambia con `UpdateRepository` en `settings.json`.
+
+Para publicar una versión nueva:
+
+```powershell
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+GitHub Actions compila y adjunta `VibeDoze.exe`, `VibeDoze.zip` y `VibeDoze.exe.sha256` al release. Las copias instaladas se actualizan solas.
+
 ## Instalación desde el código
 
 Requisitos: Windows 10/11 x64. No necesitas permisos de administrador.
@@ -92,6 +110,7 @@ Muchas laptops modernas usan **Modern Standby (S0)**; `powercfg /a` te dice si l
 | `%LOCALAPPDATA%\VibeDoze\bin\VibeDoze.Hook.exe` | Ayudante de hooks y watchdog (lo extrae la app) |
 | `%LOCALAPPDATA%\VibeDoze\vibedoze.log` | Registro de lo que hizo: cambios de tapa, acciones de energía, transiciones de estado |
 | `%LOCALAPPDATA%\VibeDoze\state.json` | Valores originales mientras hay un cambio aplicado |
+| `%LOCALAPPDATA%\VibeDoze\update\` | Versión nueva ya descargada y verificada, esperando a instalarse |
 | `%APPDATA%\VibeDoze\settings.json` | Ajustes |
 
 Ajustes avanzados, solo editables en `settings.json` (botón *Ajustes avanzados* del panel):
@@ -100,7 +119,9 @@ Ajustes avanzados, solo editables en `settings.json` (botón *Ajustes avanzados*
 |---|---|---|
 | `CpuActiveThresholdPercent` | `1.5` | % de un núcleo que cuenta como "trabajando" |
 | `CpuOnlyMinGraceMinutes` | `5` | Margen mínimo cuando no hay hooks |
-| `HookStaleMinutes` | `10` | Turno sin señales → terminado |
+| `HookStaleMinutes` | `10` | Turno sin señales (hooks ni CPU) → terminado |
+| `HookHardCapMinutes` | `30` | Turno sin ningún hook → terminado, aunque haya CPU |
+| `UpdateRepository` | `xMathyu/VibeDoze` | De qué repo de GitHub vienen las actualizaciones |
 | `WatchOthers` / `OtherAgents` | `false` | Vigila otros agentes por nombre de exe (`opencode`, `aider`) o fragmento de comando (`@google/gemini-cli`) |
 
 ## Línea de comandos

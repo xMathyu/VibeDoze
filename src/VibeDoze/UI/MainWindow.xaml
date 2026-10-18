@@ -353,6 +353,19 @@
                         <TextBlock Text="Notificaciones" Style="{StaticResource RowTitle}" FontSize="13" VerticalAlignment="Center" />
                         <CheckBox x:Name="NotifySwitch" Grid.Column="1" Style="{StaticResource ToggleSwitch}" Click="OnSettingClick" />
                     </Grid>
+                    <Border Style="{StaticResource Divider}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Actualizar automáticamente" Style="{StaticResource RowTitle}" FontSize="13" />
+                            <TextBlock x:Name="UpdateStatusText" Style="{StaticResource Tertiary}" />
+                        </StackPanel>
+                        <CheckBox x:Name="AutoUpdateSwitch" Grid.Column="1" Style="{StaticResource ToggleSwitch}" Click="OnSettingClick" />
+                    </Grid>
+                    <Button x:Name="UpdateButton" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnUpdateClick" />
                 </StackPanel>
             </Border>
 
