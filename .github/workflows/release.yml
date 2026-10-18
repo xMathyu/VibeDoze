@@ -23,9 +23,10 @@ jobs:
       - name: Publish VibeDoze.exe
         shell: pwsh
         run: |
-          $version = '1.0.0'
-          if ('${{ github.ref_type }}' -eq 'tag') { $version = '${{ github.ref_name }}'.TrimStart('v') }
-          dotnet publish src/VibeDoze/VibeDoze.csproj -c Release -o dist -p:Version=$version
+          # Tags set the version (v1.2.0 → 1.2.0); other builds use <Version> from the csproj.
+          $versionArg = @()
+          if ('${{ github.ref_type }}' -eq 'tag') { $versionArg = @("-p:Version=$('${{ github.ref_name }}'.TrimStart('v'))") }
+          dotnet publish src/VibeDoze/VibeDoze.csproj -c Release -o dist @versionArg
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $hash = (Get-FileHash dist/VibeDoze.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  VibeDoze.exe" | Set-Content -NoNewline dist/VibeDoze.exe.sha256
