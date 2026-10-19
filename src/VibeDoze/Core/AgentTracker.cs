@@ -26,8 +26,12 @@ internal sealed class AgentProcess
     public AgentKind Kind { get; set; }
     public string Host { get; set; } = "…";
     public string? ExePath { get; set; }
+    /// <summary>Codex's app-server (see AgentRules.IsServer): only its hooks tell when it works.</summary>
+    public bool Server { get; set; }
     public double CpuPercent { get; set; }
     public DateTime FirstSeenUtc { get; init; }
+    /// <summary>When the process started (MinValue if unknown).</summary>
+    public DateTime StartedUtc { get; set; } = DateTime.MinValue;
     public DateTime LastCpuActiveUtc { get; set; } = DateTime.MinValue;
     /// <summary>Consecutive scans (~3 s each) above the CPU threshold.</summary>
     public int CpuActiveStreak { get; set; }
@@ -64,11 +68,13 @@ internal sealed class AgentProcess
 internal sealed class AgentTracker
 {
     /// <summary>
-    /// Scans in a row above the CPU threshold before CPU alone counts as work. A spike shorter than a scan
-    /// touches at most two: the Codex extension's app-server, which VS Code starts even if you never use Codex,
-    /// refreshes its model list every ~4.5 min — inside the CPU-only grace, so it looked busy forever.
+    /// Scans in a row above the CPU threshold before CPU alone counts as work: a spike shorter than a scan
+    /// (a periodic refresh, a network retry) touches at most two.
     /// </summary>
     private const int SustainedCpuScans = 3;
+
+    /// <summary>CPU right after a process starts is its startup (config, plugins, MCP servers), not a turn.</summary>
+    private static readonly TimeSpan CpuWarmUp = TimeSpan.FromSeconds(60);
 
     private readonly Dictionary<string, AgentProcess> _procs = new();
     private Dictionary<string, string> _aliases = new(); // agent key inside a tree → root key
@@ -101,13 +107,16 @@ internal sealed class AgentTracker
             }
             p.Host = s.Host;
             p.ExePath = s.ExePath;
+            p.Server = s.Server;
+            if (s.Creation > 0) p.StartedUtc = DateTime.FromFileTimeUtc(s.Creation);
             p.CpuPercent = s.CpuPercent;
             p.SeenByScanner = true;
             if (s.CpuPercent >= cpuThreshold)
             {
                 p.LastCpuActiveUtc = now;
                 p.CpuActiveStreak++;
-                if (p.CpuActiveStreak >= SustainedCpuScans) p.LastCpuSustainedUtc = now;
+                if (p.CpuActiveStreak >= SustainedCpuScans && now - p.StartedUtc > CpuWarmUp)
+                    p.LastCpuSustainedUtc = now;
             }
             else
             {
@@ -237,7 +246,7 @@ internal sealed class AgentTracker
             // started) is idle: any turn would fire hooks. Its CPU proves nothing — an idle Claude Code left
             // open in a VS Code tab keeps using 1–4 % of a core.
             p.HookDriven = p.HasHooks || hookKinds.Contains(p.Kind);
-            if (!p.HookDriven)
+            if (!p.HookDriven && !p.Server) // an app-server's CPU follows the editor, not turns
             {
                 // CPU-only detection: sustained CPU only (see SustainedCpuScans).
                 working = now - p.LastCpuSustainedUtc < TimeSpan.FromSeconds(10);

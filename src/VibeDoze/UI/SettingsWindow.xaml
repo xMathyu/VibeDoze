@@ -242,7 +242,7 @@
                         </StackPanel>
                     </Border>
                     <TextBlock Style="{StaticResource VD.Caption}" Margin="4,8,0,0"
-                               Text="Sin hooks, VibeDoze detecta el trabajo por uso de CPU. Con hooks sabe exactamente cuándo empieza y termina cada respuesta." />
+                               Text="Sin hooks, VibeDoze detecta el trabajo por uso de CPU, salvo en la extensión de Codex, que necesita hooks. Con hooks sabe exactamente cuándo empieza y termina cada respuesta." />
                 </StackPanel>
 
                 <!-- Lid and power -->

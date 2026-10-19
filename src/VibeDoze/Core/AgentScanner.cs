@@ -7,6 +7,10 @@ internal sealed class AgentSample
     public required AgentKind Kind { get; init; }
     public required string Host { get; init; }
     public string? ExePath { get; init; }
+    /// <summary>Process creation time (FILETIME, UTC).</summary>
+    public long Creation { get; init; }
+    /// <summary>An editor's background server (Codex's app-server), not a session: see AgentRules.IsServer.</summary>
+    public bool Server { get; init; }
     public double CpuPercent { get; init; }
     public int TreeSize { get; init; }
 }
@@ -17,7 +21,7 @@ internal sealed class AgentSample
 /// </summary>
 internal sealed class AgentScanner
 {
-    private readonly Dictionary<(int Pid, long Creation), (AgentKind? Kind, string? Path)> _classified = new();
+    private readonly Dictionary<(int Pid, long Creation), (AgentKind? Kind, string? Path, bool Server)> _classified = new();
     private readonly Dictionary<(int Pid, long Creation), string> _hosts = new();
     private Dictionary<(int Pid, long Creation), long> _lastCpu = new();
     private long _lastScan; // FILETIME (UTC, 100 ns) — same clock as process creation times
@@ -55,7 +59,7 @@ internal sealed class AgentScanner
         }
 
         // 1) Which processes are agents?
-        var agents = new Dictionary<int, (AgentKind Kind, string? Path)>();
+        var agents = new Dictionary<int, (AgentKind Kind, string? Path, bool Server)>();
         var liveKeys = new HashSet<(int, long)>();
         foreach (var e in table.Values)
         {
@@ -68,12 +72,12 @@ internal sealed class AgentScanner
             if (!_classified.TryGetValue(key, out var info))
             {
                 var (path, cmd) = ProcessTable.GetPathAndCommandLine(e.Pid, wantCommandLine: true);
-                info = (AgentRules.Classify(e.Name, path, cmd, others), path);
+                info = (AgentRules.Classify(e.Name, path, cmd, others), path, AgentRules.IsServer(cmd));
                 _classified[key] = info;
             }
 
-            if (isPinned && pin.Creation == t.Creation) agents[e.Pid] = (pin.Kind, info.Path);
-            else if (info.Kind is { } kind) agents[e.Pid] = (kind, info.Path);
+            if (isPinned && pin.Creation == t.Creation) agents[e.Pid] = (pin.Kind, info.Path, info.Server);
+            else if (info.Kind is { } kind) agents[e.Pid] = (kind, info.Path, info.Server);
         }
 
         // 2) Keep only roots (an agent inside another agent's tree belongs to that tree).
@@ -123,6 +127,8 @@ internal sealed class AgentScanner
                 Kind = agent.Kind,
                 Host = host,
                 ExePath = agent.Path,
+                Creation = rootTimes.Creation,
+                Server = agent.Server,
                 CpuPercent = wall > 0 ? delta * 100.0 / wall : 0,
                 TreeSize = size,
             });
@@ -136,7 +142,7 @@ internal sealed class AgentScanner
     }
 
     private static bool HasAgentAncestor(int pid, Dictionary<int, ProcEntry> table,
-        Dictionary<int, (AgentKind, string?)> agents, Func<int, (long Creation, long Cpu)?> times)
+        Dictionary<int, (AgentKind, string?, bool)> agents, Func<int, (long Creation, long Cpu)?> times)
     {
         int cur = pid;
         long curCreation = times(pid)?.Creation ?? long.MaxValue;

@@ -133,7 +133,9 @@ public partial class SettingsWindow : Window
     private string AgentSummary(AgentKind kind, IReadOnlyList<AgentProcess> agents)
     {
         var mine = agents.Where(a => a.Kind == kind).ToList();
-        string detection = _engine.HookSeen(kind) ? "detección por hooks" : "detección por CPU";
+        string detection = _engine.HookSeen(kind) ? "detección por hooks"
+            : mine.Count > 0 && mine.All(a => a.Server) ? "sin hooks"
+            : "detección por CPU";
         if (mine.Count == 0) return $"No está abierto · {detection}";
         int working = mine.Count(a => a.Working);
         string open = mine.Count == 1 ? "1 sesión" : $"{mine.Count} sesiones";
@@ -200,7 +202,7 @@ public partial class SettingsWindow : Window
             IntegrationStatus.Installed => ("Apruébalos en Codex con /hooks", "Quitar", "VD.Orange"),
             IntegrationStatus.Outdated => ("Apunta a otra ubicación de VibeDoze", "Reparar", "VD.Orange"),
             IntegrationStatus.Error => ("No se pudo leer ~/.codex/hooks.json", "Reintentar", "VD.Red"),
-            _ => ("No instalado · se usa la CPU", "Activar", "VD.Dim"),
+            _ => ("No instalado · la extensión los necesita", "Activar", "VD.Dim"),
         };
 
         ClaudeHookStatus.Text = claudeText;

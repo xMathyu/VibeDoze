@@ -100,7 +100,8 @@ Cuando se cumple el límite de tiempo con la pantalla encendida, aparece una cue
    - `PermissionRequest` / `Notification` de permiso → esperando
    - `Stop` / `StopFailure` / `Interrupt` → terminó
    - `SessionEnd` → cerrada
-3. **CPU (respaldo sin hooks).** Si el árbol de procesos del agente usa más de ~1.5 % de un núcleo durante unos 9 s seguidos, cuenta como trabajando. Los picos cortos no cuentan: la extensión de Codex arranca su `app-server` con VS Code aunque no la uses, y cada pocos minutos consulta la lista de modelos. Como el modelo puede "pensar" sin usar CPU, en este modo el margen mínimo es de 5 min.
+3. **CPU (respaldo sin hooks).** Si el árbol de procesos del agente usa más de ~1.5 % de un núcleo durante unos 9 s seguidos, cuenta como trabajando. No cuentan los picos cortos ni el primer minuto de cada proceso, que es su arranque. Como el modelo puede "pensar" sin usar CPU, en este modo el margen mínimo es de 5 min.
+   - La extensión de Codex (VS Code, Cursor…) arranca su `app-server` con cada ventana del editor, aunque no la uses, y su CPU sigue a la interfaz (arranque, abrir el panel, refrescos), no a los turnos. Por eso solo se detecta con hooks: sin ellos aparece como *sin hooks* y no mantiene la laptop despierta.
 
 Notas de los hooks:
 
@@ -166,6 +167,7 @@ VibeDoze.exe snapshot [carpeta] [light|dark]
 - **La laptop no se suspende al cerrar la tapa, ni siquiera sin agentes.** Revisa *Ajustes → General → Diagnóstico → Al cerrar la tapa, ahora*. Ejecuta `VibeDoze.exe restore-lid`, o restáuralo a mano: `powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1` y `powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 1`.
 - **La laptop ya no se suspende sola por inactividad, ni siquiera sin agentes.** Ejecuta `VibeDoze.exe restore-lid`, o revisa el tiempo de suspensión en *Configuración → Sistema → Energía y batería*.
 - **Codex aparece como "detección por CPU" con los hooks instalados.** Aprueba los hooks en Codex (`/hooks`).
+- **Codex en VS Code no mantiene la laptop despierta.** La extensión solo se detecta con hooks: actívalos en *Ajustes → Agentes* y apruébalos en Codex.
 - **¿Qué está haciendo?** Abre el *Registro de actividad* en *Ajustes → General → Diagnóstico*. Con una consola de administrador, `powercfg /requests` muestra `VibeDoze: Claude Code trabajando` mientras la mantiene despierta.
 
 ## Desinstalar

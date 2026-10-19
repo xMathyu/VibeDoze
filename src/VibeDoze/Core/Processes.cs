@@ -125,6 +125,13 @@ internal static class AgentRules
         return null;
     }
 
+    /// <summary>
+    /// Codex's app-server: the Codex extension starts one with every editor window, whether or not you use it.
+    /// Its CPU follows the editor (startup, opening the Codex panel, model list refreshes), not turns.
+    /// </summary>
+    public static bool IsServer(string? commandLine) =>
+        commandLine is not null && commandLine.Contains(" app-server", StringComparison.OrdinalIgnoreCase);
+
     public static IReadOnlyList<string> ParseOthers(string? list) =>
         (list ?? string.Empty)
             .Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
