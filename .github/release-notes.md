@@ -7,6 +7,7 @@ Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con 
 - Las sesiones abiertas pero inactivas (por ejemplo, una pestaña de Claude Code en VS Code) ya no aparecen como "Trabajando" cuando los hooks están activos, ni mantienen la laptop despierta.
 - **Codex en VS Code ya no mantiene la laptop despierta si no lo usas.** La extensión de Codex arranca un proceso en segundo plano con cada ventana del editor, y su CPU sigue a la interfaz (arranque, abrir el panel, refrescos cada ~4,5 min), no a los turnos. Sin hooks, VibeDoze la leía como trabajo y la sesión aparecía como "Terminó" sin parar. Ahora la extensión de Codex se detecta solo con hooks; si la usas, actívalos en *Ajustes → Agentes*.
 - La detección por CPU (sin hooks) ignora los picos cortos y el primer minuto de cada proceso, que es su arranque.
+- Claude Code y Codex se muestran con sus logos en el panel y en *Ajustes → Agentes*.
 
 ### Instalación
 

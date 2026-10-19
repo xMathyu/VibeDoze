@@ -176,7 +176,7 @@
                             <Border Style="{StaticResource VD.Row}">
                                 <DockPanel>
                                     <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Width="26" Height="26" CornerRadius="7" Background="{DynamicResource VD.Accent}" Margin="0,0,12,0">
-                                        <ui:GlyphIcon Data="{StaticResource G.Terminal}" Width="15" Height="15" Foreground="White" Thickness="2.2" />
+                                        <ui:GlyphIcon Data="{StaticResource G.Claude}" Width="15" Height="15" Foreground="White" Filled="True" />
                                     </Border>
                                     <CheckBox x:Name="ClaudeSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Vigilar Claude Code" />
                                     <StackPanel VerticalAlignment="Center">
@@ -188,7 +188,7 @@
                             <Border Style="{StaticResource VD.RowNext}">
                                 <DockPanel>
                                     <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Width="26" Height="26" CornerRadius="7" Background="{DynamicResource VD.Accent}" Margin="0,0,12,0">
-                                        <ui:GlyphIcon Data="{StaticResource G.Sparkle}" Width="15" Height="15" Foreground="White" Thickness="2.2" />
+                                        <ui:GlyphIcon Data="{StaticResource G.Codex}" Width="15" Height="15" Foreground="White" Filled="True" />
                                     </Border>
                                     <CheckBox x:Name="CodexSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Vigilar Codex" />
                                     <StackPanel VerticalAlignment="Center">

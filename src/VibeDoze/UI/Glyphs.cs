@@ -22,9 +22,14 @@ public sealed class GlyphIcon : FrameworkElement
         nameof(Thickness), typeof(double), typeof(GlyphIcon),
         new FrameworkPropertyMetadata(1.8, FrameworkPropertyMetadataOptions.AffectsRender));
 
-    public static readonly DependencyProperty FilledProperty = DependencyProperty.Register(
+    /// <summary>Inherits, so a templated control (a tile) can ask for its icon solid: ui:GlyphIcon.Filled="True".</summary>
+    public static readonly DependencyProperty FilledProperty = DependencyProperty.RegisterAttached(
         nameof(Filled), typeof(bool), typeof(GlyphIcon),
-        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static bool GetFilled(DependencyObject element) => (bool)element.GetValue(FilledProperty);
+
+    public static void SetFilled(DependencyObject element, bool value) => element.SetValue(FilledProperty, value);
 
     public Geometry? Data
     {

@@ -92,13 +92,13 @@
                             <RowDefinition Height="10" />
                             <RowDefinition />
                         </Grid.RowDefinitions>
-                        <ToggleButton x:Name="ClaudeTile" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Terminal}" Click="OnTileClick">
+                        <ToggleButton x:Name="ClaudeTile" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Claude}" ui:GlyphIcon.Filled="True" Click="OnTileClick">
                             <StackPanel>
                                 <TextBlock Text="Claude Code" FontSize="13" FontWeight="SemiBold" />
                                 <TextBlock x:Name="ClaudeTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                         </ToggleButton>
-                        <ToggleButton x:Name="CodexTile" Grid.Column="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Sparkle}" Click="OnTileClick">
+                        <ToggleButton x:Name="CodexTile" Grid.Column="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Codex}" ui:GlyphIcon.Filled="True" Click="OnTileClick">
                             <StackPanel>
                                 <TextBlock Text="Codex" FontSize="13" FontWeight="SemiBold" />
                                 <TextBlock x:Name="CodexTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
