@@ -4,7 +4,6 @@
         xmlns:ui="clr-namespace:VibeDoze.UI"
         Title="VibeDoze"
         Width="452"
-        SizeToContent="Height"
         WindowStyle="None"
         AllowsTransparency="True"
         ThemeMode="None"
@@ -16,219 +15,224 @@
         FontFamily="{StaticResource VD.Font}"
         Foreground="{DynamicResource VD.Text}">
 
-    <!-- 16 px margin leaves room for the soft shadow around the rounded panel. -->
+    <!-- The window is as tall as the work area and never resizes (its transparent part lets clicks through); the
+         sheet sits at the bottom and grows upward from the taskbar, animated by MainWindow.FitPanel. The 16 px margin
+         leaves room for the soft shadow around the rounded sheet. -->
     <Grid Margin="16">
-        <Border CornerRadius="22" Background="{DynamicResource VD.Panel}">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.24" />
-            </Border.Effect>
-        </Border>
-        <Border CornerRadius="22" Background="{DynamicResource VD.Panel}" BorderBrush="{DynamicResource VD.Hair}" BorderThickness="1">
-            <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="14">
+        <Grid x:Name="Sheet" VerticalAlignment="Bottom">
+            <Border CornerRadius="22" Background="{DynamicResource VD.Panel}">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.24" />
+                </Border.Effect>
+            </Border>
+            <Border CornerRadius="22" Background="{DynamicResource VD.Panel}" BorderBrush="{DynamicResource VD.Hair}" BorderThickness="1">
+                <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="Stack" Margin="14" SizeChanged="OnContentSizeChanged">
 
-                    <!-- Header -->
-                    <DockPanel Margin="6,2,6,10">
-                        <CheckBox x:Name="EnabledSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}"
-                                  Click="OnEnabledClick" AutomationProperties.Name="Activar VibeDoze" />
-                        <Image x:Name="Logo" Width="32" Height="32" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="VibeDoze" FontSize="15" FontWeight="SemiBold" />
-                            <TextBlock x:Name="EnabledText" Style="{StaticResource VD.Caption}" />
-                        </StackPanel>
-                    </DockPanel>
+                        <!-- Header -->
+                        <DockPanel Margin="6,2,6,10">
+                            <CheckBox x:Name="EnabledSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}"
+                                      Click="OnEnabledClick" AutomationProperties.Name="Activar VibeDoze" />
+                            <Image x:Name="Logo" Width="32" Height="32" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="VibeDoze" FontSize="15" FontWeight="SemiBold" />
+                                <TextBlock x:Name="EnabledText" Style="{StaticResource VD.Caption}" />
+                            </StackPanel>
+                        </DockPanel>
 
-                    <!-- Status -->
-                    <Border Style="{StaticResource VD.ModuleCard}" Padding="16" Margin="0,0,0,10">
-                        <StackPanel>
-                            <DockPanel>
-                                <Border x:Name="Orb" DockPanel.Dock="Left" Width="52" Height="52" CornerRadius="26" Margin="0,0,14,0"
-                                        Background="{DynamicResource VD.GreenSoft}" VerticalAlignment="Top">
-                                    <ui:CupIcon x:Name="OrbCup" Width="28" Height="28" Foreground="{DynamicResource VD.Green}" />
-                                </Border>
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock x:Name="HeadlineText" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                    <TextBlock x:Name="DetailText" Style="{StaticResource VD.Caption}" FontSize="13" Margin="0,3,0,0" />
+                        <!-- Status -->
+                        <Border Style="{StaticResource VD.ModuleCard}" Padding="16" Margin="0,0,0,10">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Border x:Name="Orb" DockPanel.Dock="Left" Width="52" Height="52" CornerRadius="26" Margin="0,0,14,0"
+                                            Background="{DynamicResource VD.GreenSoft}" VerticalAlignment="Top">
+                                        <ui:CupIcon x:Name="OrbCup" Width="28" Height="28" Foreground="{DynamicResource VD.Green}" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="HeadlineText" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <!-- Two lines are always reserved: the detail changes with the state (one or two lines) and the card must not move. -->
+                                        <TextBlock x:Name="DetailText" Style="{StaticResource VD.Caption}" FontSize="13" Margin="0,3,0,0" MinHeight="36" />
+                                    </StackPanel>
+                                </DockPanel>
+                                <WrapPanel Margin="0,14,0,-6">
+                                    <Border Style="{StaticResource VD.Chip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:GlyphIcon Data="{StaticResource G.Laptop}" Width="15" Height="15" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="LidChip" FontSize="12" FontWeight="Medium" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource VD.Chip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:GlyphIcon Data="{StaticResource G.Thermo}" Width="15" Height="15" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="TempChip" FontSize="12" FontWeight="Medium" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="BatteryChipBorder" Style="{StaticResource VD.Chip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:GlyphIcon Data="{StaticResource G.Battery}" Width="15" Height="15" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="BatteryChip" FontSize="12" FontWeight="Medium" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </WrapPanel>
+                                <StackPanel x:Name="StatusActions" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
+                                    <Button x:Name="ResumeButton" Content="Reanudar ahora" Style="{StaticResource VD.CapsuleAccent}" Height="32"
+                                            Margin="0,0,8,0" Click="OnResumeClick" />
+                                    <Button x:Name="CancelActionButton" Content="Cancelar" Style="{StaticResource VD.CapsuleFill}" Height="32"
+                                            Click="OnCancelActionClick" />
                                 </StackPanel>
-                            </DockPanel>
-                            <WrapPanel Margin="0,14,0,-6">
-                                <Border Style="{StaticResource VD.Chip}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:GlyphIcon Data="{StaticResource G.Laptop}" Width="15" Height="15" VerticalAlignment="Center" />
-                                        <TextBlock x:Name="LidChip" FontSize="12" FontWeight="Medium" Margin="6,0,0,0" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource VD.Chip}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:GlyphIcon Data="{StaticResource G.Thermo}" Width="15" Height="15" VerticalAlignment="Center" />
-                                        <TextBlock x:Name="TempChip" FontSize="12" FontWeight="Medium" Margin="6,0,0,0" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </Border>
-                                <Border x:Name="BatteryChipBorder" Style="{StaticResource VD.Chip}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:GlyphIcon Data="{StaticResource G.Battery}" Width="15" Height="15" VerticalAlignment="Center" />
-                                        <TextBlock x:Name="BatteryChip" FontSize="12" FontWeight="Medium" Margin="6,0,0,0" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </Border>
-                            </WrapPanel>
-                            <StackPanel x:Name="StatusActions" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
-                                <Button x:Name="ResumeButton" Content="Reanudar ahora" Style="{StaticResource VD.CapsuleAccent}" Height="32"
-                                        Margin="0,0,8,0" Click="OnResumeClick" />
-                                <Button x:Name="CancelActionButton" Content="Cancelar" Style="{StaticResource VD.CapsuleFill}" Height="32"
-                                        Click="OnCancelActionClick" />
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                        </Border>
 
-                    <!-- Quick toggles -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition />
-                            <ColumnDefinition Width="10" />
-                            <ColumnDefinition />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition />
-                            <RowDefinition Height="10" />
-                            <RowDefinition />
-                        </Grid.RowDefinitions>
-                        <ToggleButton x:Name="ClaudeTile" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Claude}" ui:GlyphIcon.Filled="True" Click="OnTileClick">
-                            <StackPanel>
-                                <TextBlock Text="Claude Code" FontSize="13" FontWeight="SemiBold" />
-                                <TextBlock x:Name="ClaudeTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton x:Name="CodexTile" Grid.Column="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Codex}" ui:GlyphIcon.Filled="True" Click="OnTileClick">
-                            <StackPanel>
-                                <TextBlock Text="Codex" FontSize="13" FontWeight="SemiBold" />
-                                <TextBlock x:Name="CodexTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton x:Name="LidTile" Grid.Row="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Laptop}" Click="OnTileClick">
-                            <StackPanel>
-                                <TextBlock Text="Tapa cerrada" FontSize="13" FontWeight="SemiBold" />
-                                <TextBlock x:Name="LidTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton x:Name="ManualTile" Grid.Row="2" Grid.Column="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Sun}" Click="OnManualClick">
-                            <StackPanel>
-                                <TextBlock Text="Despierta ahora" FontSize="13" FontWeight="SemiBold" />
-                                <TextBlock x:Name="ManualTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </ToggleButton>
-                    </Grid>
+                        <!-- Quick toggles -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition />
+                                <RowDefinition Height="10" />
+                                <RowDefinition />
+                            </Grid.RowDefinitions>
+                            <ToggleButton x:Name="ClaudeTile" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Claude}" ui:GlyphIcon.Filled="True" Click="OnTileClick">
+                                <StackPanel>
+                                    <TextBlock Text="Claude Code" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ClaudeTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <ToggleButton x:Name="CodexTile" Grid.Column="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Codex}" ui:GlyphIcon.Filled="True" Click="OnTileClick">
+                                <StackPanel>
+                                    <TextBlock Text="Codex" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="CodexTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <ToggleButton x:Name="LidTile" Grid.Row="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Laptop}" Click="OnTileClick">
+                                <StackPanel>
+                                    <TextBlock Text="Tapa cerrada" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="LidTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <ToggleButton x:Name="ManualTile" Grid.Row="2" Grid.Column="2" Style="{StaticResource VD.Tile}" Tag="{StaticResource G.Sun}" Click="OnManualClick">
+                                <StackPanel>
+                                    <TextBlock Text="Despierta ahora" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ManualTileSub" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </ToggleButton>
+                        </Grid>
 
-                    <!-- Sessions -->
-                    <Border Style="{StaticResource VD.ModuleCard}" Padding="16,12,16,4" Margin="0,0,0,10">
-                        <StackPanel>
-                            <DockPanel Margin="0,0,0,6">
-                                <TextBlock x:Name="SessionCount" DockPanel.Dock="Right" Style="{StaticResource VD.Caption}" VerticalAlignment="Center" />
-                                <TextBlock Text="Sesiones" FontSize="13" FontWeight="SemiBold" />
-                            </DockPanel>
-                            <ItemsControl x:Name="SessionList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource VD.Sep}" Padding="0,7">
-                                            <DockPanel>
-                                                <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="{Binding Dot}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding State}" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap"
-                                                           VerticalAlignment="Center" Margin="8,0,0,0" />
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                            </DockPanel>
+                        <!-- Sessions -->
+                        <Border Style="{StaticResource VD.ModuleCard}" Padding="16,12,16,4" Margin="0,0,0,10">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock x:Name="SessionCount" DockPanel.Dock="Right" Style="{StaticResource VD.Caption}" VerticalAlignment="Center" />
+                                    <TextBlock Text="Sesiones" FontSize="13" FontWeight="SemiBold" />
+                                </DockPanel>
+                                <ItemsControl x:Name="SessionList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource VD.Sep}" Padding="0,7">
+                                                <DockPanel>
+                                                    <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="{Binding Dot}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding State}" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap"
+                                                               VerticalAlignment="Center" Margin="8,0,0,0" />
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource VD.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="NoSessions" Style="{StaticResource VD.Caption}" Margin="0,2,0,10"
+                                           Text="No hay agentes abiertos. Funciona con VS Code, Cursor, JetBrains y cualquier terminal." />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Timer -->
+                        <Border Style="{StaticResource VD.ModuleCard}" Padding="16,12" Margin="0,0,0,10">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock x:Name="TimerRemaining" DockPanel.Dock="Right" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource VD.Accent}" VerticalAlignment="Center" />
+                                    <TextBlock Text="Límite de tiempo" FontSize="13" FontWeight="SemiBold" />
+                                </DockPanel>
+                                <Border Background="{DynamicResource VD.SegTrack}" CornerRadius="10" Padding="2">
+                                    <UniformGrid x:Name="TimerSegments" Columns="6">
+                                        <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="Sin" Tag="0" Click="OnTimerSegment" />
+                                        <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="15 m" Tag="15" Click="OnTimerSegment" />
+                                        <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="30 m" Tag="30" Click="OnTimerSegment" />
+                                        <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="1 h" Tag="60" Click="OnTimerSegment" />
+                                        <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="2 h" Tag="120" Click="OnTimerSegment" />
+                                        <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="4 h" Tag="240" Click="OnTimerSegment" />
+                                    </UniformGrid>
+                                </Border>
+                                <TextBlock x:Name="TimerStatus" Style="{StaticResource VD.Caption}" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Protection -->
+                        <Border Style="{StaticResource VD.ModuleCard}" Padding="16,2" Margin="0,0,0,10">
+                            <StackPanel>
+                                <Border Style="{StaticResource VD.Row}" MinHeight="48">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Background="{DynamicResource VD.Orange}" Margin="0,0,12,0">
+                                            <ui:GlyphIcon Data="{StaticResource G.Thermo}" Width="17" Height="17" Foreground="White" Thickness="2" />
                                         </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock x:Name="NoSessions" Style="{StaticResource VD.Caption}" Margin="0,2,0,10"
-                                       Text="No hay agentes abiertos. Funciona con VS Code, Cursor, JetBrains y cualquier terminal." />
-                        </StackPanel>
-                    </Border>
+                                        <CheckBox x:Name="ThermalSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="8,0,0,0"
+                                                  Click="OnProtectionClick" AutomationProperties.Name="Protección térmica" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Protección térmica" FontSize="13" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="ThermalSub" Style="{StaticResource VD.Caption}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                                <Border Style="{StaticResource VD.RowNext}" MinHeight="48">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Background="{DynamicResource VD.GreenDot}" Margin="0,0,12,0">
+                                            <ui:GlyphIcon Data="{StaticResource G.Battery}" Width="17" Height="17" Foreground="White" Thickness="2" />
+                                        </Border>
+                                        <CheckBox x:Name="BatterySwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="8,0,0,0"
+                                                  Click="OnProtectionClick" AutomationProperties.Name="Protección de batería" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Batería baja" FontSize="13" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="BatterySub" Style="{StaticResource VD.Caption}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                    <!-- Timer -->
-                    <Border Style="{StaticResource VD.ModuleCard}" Padding="16,12" Margin="0,0,0,10">
-                        <StackPanel>
-                            <DockPanel Margin="0,0,0,10">
-                                <TextBlock x:Name="TimerRemaining" DockPanel.Dock="Right" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource VD.Accent}" VerticalAlignment="Center" />
-                                <TextBlock Text="Límite de tiempo" FontSize="13" FontWeight="SemiBold" />
-                            </DockPanel>
-                            <Border Background="{DynamicResource VD.SegTrack}" CornerRadius="10" Padding="2">
-                                <UniformGrid x:Name="TimerSegments" Columns="6">
-                                    <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="Sin" Tag="0" Click="OnTimerSegment" />
-                                    <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="15 m" Tag="15" Click="OnTimerSegment" />
-                                    <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="30 m" Tag="30" Click="OnTimerSegment" />
-                                    <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="1 h" Tag="60" Click="OnTimerSegment" />
-                                    <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="2 h" Tag="120" Click="OnTimerSegment" />
-                                    <RadioButton GroupName="vdTimer" Style="{StaticResource VD.Segment}" Content="4 h" Tag="240" Click="OnTimerSegment" />
-                                </UniformGrid>
-                            </Border>
-                            <TextBlock x:Name="TimerStatus" Style="{StaticResource VD.Caption}" Margin="0,8,0,0" />
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Protection -->
-                    <Border Style="{StaticResource VD.ModuleCard}" Padding="16,2" Margin="0,0,0,10">
-                        <StackPanel>
-                            <Border Style="{StaticResource VD.Row}" MinHeight="48">
-                                <DockPanel>
-                                    <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Background="{DynamicResource VD.Orange}" Margin="0,0,12,0">
-                                        <ui:GlyphIcon Data="{StaticResource G.Thermo}" Width="17" Height="17" Foreground="White" Thickness="2" />
-                                    </Border>
-                                    <CheckBox x:Name="ThermalSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="8,0,0,0"
-                                              Click="OnProtectionClick" AutomationProperties.Name="Protección térmica" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Protección térmica" FontSize="13" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="ThermalSub" Style="{StaticResource VD.Caption}" />
-                                    </StackPanel>
-                                </DockPanel>
-                            </Border>
-                            <Border Style="{StaticResource VD.RowNext}" MinHeight="48">
-                                <DockPanel>
-                                    <Border DockPanel.Dock="Left" Style="{StaticResource VD.IconTile}" Background="{DynamicResource VD.GreenDot}" Margin="0,0,12,0">
-                                        <ui:GlyphIcon Data="{StaticResource G.Battery}" Width="17" Height="17" Foreground="White" Thickness="2" />
-                                    </Border>
-                                    <CheckBox x:Name="BatterySwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="8,0,0,0"
-                                              Click="OnProtectionClick" AutomationProperties.Name="Protección de batería" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Batería baja" FontSize="13" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="BatterySub" Style="{StaticResource VD.Caption}" />
-                                    </StackPanel>
-                                </DockPanel>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Footer -->
-                    <Button x:Name="UpdateLink" Style="{StaticResource VD.Link}" HorizontalAlignment="Left" Margin="2,0,0,4"
-                            Visibility="Collapsed" Click="OnInstallUpdate">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:GlyphIcon Data="{StaticResource G.Update}" Width="17" Height="17" VerticalAlignment="Center" />
-                            <TextBlock x:Name="UpdateLinkText" Margin="6,0,0,0" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <DockPanel Margin="0,2,0,0">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource VD.IconButton}" Click="OnQuit"
-                                AutomationProperties.Name="Salir de VibeDoze" ToolTip="Salir de VibeDoze">
-                            <ui:GlyphIcon Data="{StaticResource G.Power}" Width="16" Height="16" />
-                        </Button>
-                        <Button DockPanel.Dock="Right" Style="{StaticResource VD.Capsule}" Margin="0,0,8,0" Click="OnSleepNow">
+                        <!-- Footer -->
+                        <Button x:Name="UpdateLink" Style="{StaticResource VD.Link}" HorizontalAlignment="Left" Margin="2,0,0,4"
+                                Visibility="Collapsed" Click="OnInstallUpdate">
                             <StackPanel Orientation="Horizontal">
-                                <ui:GlyphIcon Data="{StaticResource G.Moon}" Width="16" Height="16" VerticalAlignment="Center" />
-                                <TextBlock Text="Suspender" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                <ui:GlyphIcon Data="{StaticResource G.Update}" Width="17" Height="17" VerticalAlignment="Center" />
+                                <TextBlock x:Name="UpdateLinkText" Margin="6,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button Style="{StaticResource VD.Link}" HorizontalAlignment="Left" Click="OnOpenSettings">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:GlyphIcon Data="{StaticResource G.Sliders}" Width="17" Height="17" VerticalAlignment="Center" />
-                                <TextBlock Text="Ajustes" Margin="6,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                    </DockPanel>
-                </StackPanel>
-            </ScrollViewer>
-        </Border>
+                        <DockPanel Margin="0,2,0,0">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource VD.IconButton}" Click="OnQuit"
+                                    AutomationProperties.Name="Salir de VibeDoze" ToolTip="Salir de VibeDoze">
+                                <ui:GlyphIcon Data="{StaticResource G.Power}" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource VD.Capsule}" Margin="0,0,8,0" Click="OnSleepNow">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:GlyphIcon Data="{StaticResource G.Moon}" Width="16" Height="16" VerticalAlignment="Center" />
+                                    <TextBlock Text="Suspender" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource VD.Link}" HorizontalAlignment="Left" Click="OnOpenSettings">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:GlyphIcon Data="{StaticResource G.Sliders}" Width="17" Height="17" VerticalAlignment="Center" />
+                                    <TextBlock Text="Ajustes" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </DockPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

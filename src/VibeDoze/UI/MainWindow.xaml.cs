@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using VibeDoze.Core;
 
@@ -23,8 +24,14 @@ public partial class MainWindow : Window
 {
     private readonly Engine _engine;
     private readonly App _app;
+    private const double Shadow = 16, Gap = 10;
+    private static readonly TimeSpan Slide = TimeSpan.FromMilliseconds(260);
+
     private bool _rendering;
     private string _sessionSignature = string.Empty;
+    private bool _opening;
+    /// <summary>Keeps the content anchored to the bottom while the sheet's height animates.</summary>
+    private readonly TranslateTransform _shift = new();
 
     internal MainWindow(Engine engine, App app)
     {
@@ -32,6 +39,7 @@ public partial class MainWindow : Window
         _engine = engine;
         _app = app;
         Logo.Source = LoadLogo();
+        Stack.RenderTransform = _shift;
 
         _engine.Updated += OnEngineUpdated;
         ThemeManager.Changed += OnThemeChanged;
@@ -40,16 +48,19 @@ public partial class MainWindow : Window
         {
             if (e.Key == Key.Escape) HideFlyout();
         };
-        SizeChanged += (_, _) => Reposition();
     }
 
     public DateTime HiddenAtUtc { get; private set; } = DateTime.MinValue;
 
     internal void ShowNearTray()
     {
+        _opening = true; // the first layout sizes the sheet in place: nothing animates while opening
         Render();
-        Show();
         Reposition();
+        Show();
+        UpdateLayout();
+        FitPanel(animate: false);
+        _opening = false;
         Activate();
         Native.SetForegroundWindow(new WindowInteropHelper(this).Handle);
     }
@@ -74,16 +85,45 @@ public partial class MainWindow : Window
         base.OnClosing(e);
     }
 
-    /// <summary>Bottom-right of the work area; the window's 16 px margin is the shadow.</summary>
+    /// <summary>
+    /// Right column of the work area, flush with the taskbar. The window is as tall as the work area and never
+    /// resizes: its transparent part lets clicks through, and the sheet inside grows upward from the bottom edge.
+    /// Resizing the window on every content change moved it in two steps (resize, then reposition): a visible jolt.
+    /// </summary>
     private void Reposition()
     {
-        const double shadow = 16, gap = 10;
         var area = SystemParameters.WorkArea;
-        MaxHeight = Math.Max(320, area.Height - 2 * gap + 2 * shadow);
-        double width = ActualWidth > 0 ? ActualWidth : Width;
-        double height = ActualHeight > 0 ? ActualHeight : 700;
-        Left = area.Right - width + shadow - gap;
-        Top = Math.Max(area.Top + gap - shadow, area.Bottom - height + shadow - gap);
+        double sheetMax = Math.Max(320, area.Height - 2 * Gap);
+        Height = sheetMax + 2 * Shadow;
+        Left = area.Right - Width + Shadow - Gap;
+        Top = area.Bottom - Height + Shadow - Gap;
+        Sheet.MaxHeight = sheetMax;
+    }
+
+    private void OnContentSizeChanged(object sender, SizeChangedEventArgs e) => FitPanel(animate: IsVisible && !_opening);
+
+    /// <summary>
+    /// Sizes the sheet to its content (capped to the work area; then it scrolls). While the panel is open the change
+    /// slides: the content is laid out for the new height at once, shifted so that it stays anchored to the bottom,
+    /// and the sheet's top edge moves to reveal or cover the difference.
+    /// </summary>
+    private void FitPanel(bool animate)
+    {
+        double natural = Stack.DesiredSize.Height + 2; // the margin is part of DesiredSize; +2 for the hairline border
+        double target = Math.Min(natural, Sheet.MaxHeight);
+        Scroller.VerticalScrollBarVisibility = natural > target + 0.5 ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden;
+
+        double from = Sheet.ActualHeight;
+        Sheet.BeginAnimation(HeightProperty, null);
+        _shift.BeginAnimation(TranslateTransform.YProperty, null);
+        Sheet.Height = target;
+        if (!animate || from <= 0 || Math.Abs(target - from) < 0.5) return;
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        Sheet.BeginAnimation(HeightProperty,
+            new DoubleAnimation(from, target, Slide) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+        _shift.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(from - target, 0, Slide) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
     }
 
     private void OnEngineUpdated()

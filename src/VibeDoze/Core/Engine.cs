@@ -55,6 +55,8 @@ internal sealed class Engine : IDisposable
     /// <summary>Agent kinds whose hooks are installed and have reported at least once.</summary>
     private readonly HashSet<AgentKind> _hookKinds = new();
     private readonly DispatcherTimer _timer;
+    /// <summary>Applies the power plans a moment after a UI command, once the panel has painted (and animated).</summary>
+    private readonly DispatcherTimer _settle;
     private readonly HwndSource _window;
     private readonly List<IntPtr> _powerNotifications = new();
     private readonly IntPtr _suspendNotification;
@@ -114,6 +116,16 @@ internal sealed class Engine : IDisposable
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => Tick();
+        _settle = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(300) };
+        _settle.Tick += (_, _) =>
+        {
+            _settle.Stop();
+            if (_disposed) return;
+            var now = DateTime.UtcNow;
+            Evaluate(now);
+            UpdateSlash(now);
+            Updated?.Invoke();
+        };
         Log.Info($"VibeDoze iniciado (Modern Standby: {PowerController.Capabilities.ModernStandby}, " +
                  $"hibernación: {PowerController.Capabilities.CanHibernate}, sensor: {_thermal.SensorName ?? "ninguno"})");
     }
@@ -267,13 +279,20 @@ internal sealed class Engine : IDisposable
         Refresh();
     }
 
+    /// <summary>
+    /// Re-evaluates after a command from the UI. The panel is painted first; the slow part of <see cref="Evaluate"/>
+    /// (writing "sleep after" and the lid action to every power plan: up to a second) follows a moment later, so a
+    /// click answers at once instead of freezing the panel and then jumping to the new state.
+    /// </summary>
     public void Refresh()
     {
         if (_disposed) return;
         var now = DateTime.UtcNow;
-        Evaluate(now);
+        Evaluate(now, powerPlans: false);
         UpdateSlash(now);
         Updated?.Invoke();
+        _settle.Stop();
+        _settle.Start();
     }
 
     // ───────────── Loop ─────────────
@@ -371,7 +390,11 @@ internal sealed class Engine : IDisposable
         BatteryPercent = hasBattery ? (int)Math.Round(status.BatteryLifePercent * 100) : null;
     }
 
-    private void Evaluate(DateTime now)
+    /// <param name="powerPlans">
+    /// False skips the slow step (writing the power plans) so the caller can paint first; the next pass, a moment
+    /// later or on the next tick, applies it. Every step here is idempotent, so running twice is harmless.
+    /// </param>
+    private void Evaluate(DateTime now, bool powerPlans = true)
     {
         // 0) Someone is in front of the screen again (lid open, display on for 10 s, a while after our action).
         if (HoldReason is not null && Interactive && !LidClosed
@@ -410,22 +433,25 @@ internal sealed class Engine : IDisposable
         // 3) Keep awake ("sleep after: never" too, it replaces an armed sleep) + lid override.
         if (want) _sleepAttemptUtc = null; // agents are busy again: never escalate an old sleep request
         _power.SetKeepAwake(want, want && Settings.KeepDisplayOn && !LidClosed, PowerReason(busy));
-        SyncIdleSleep(want);
-        bool wantOverride = want && Settings.KeepRunningWithLidClosed && PowerController.Capabilities.LidPresent;
-        if (wantOverride && !_power.LidOverrideActive)
+        if (powerPlans)
         {
-            _power.ApplyLidOverride();
-        }
-        else if (!wantOverride && _power.LidOverrideActive)
-        {
-            _power.RestoreLid();
-            // The lid is closed and nobody is using an external screen: do what closing the lid would have done.
-            if (Bagged && Pending is null && HoldReason is null && !sessionEnding)
+            SyncIdleSleep(want);
+            bool wantOverride = want && Settings.KeepRunningWithLidClosed && PowerController.Capabilities.LidPresent;
+            if (wantOverride && !_power.LidOverrideActive)
             {
-                string why = _batteryHold ? "Batería baja con la tapa cerrada" : "Los agentes terminaron con la tapa cerrada";
-                StartAction(Settings.LidClosedDoneAction, _batteryHold ? ActionSource.Battery : ActionSource.Finished, why, now);
-                UpdateHeadline(busy);
-                return;
+                _power.ApplyLidOverride();
+            }
+            else if (!wantOverride && _power.LidOverrideActive)
+            {
+                _power.RestoreLid();
+                // The lid is closed and nobody is using an external screen: do what closing the lid would have done.
+                if (Bagged && Pending is null && HoldReason is null && !sessionEnding)
+                {
+                    string why = _batteryHold ? "Batería baja con la tapa cerrada" : "Los agentes terminaron con la tapa cerrada";
+                    StartAction(Settings.LidClosedDoneAction, _batteryHold ? ActionSource.Battery : ActionSource.Finished, why, now);
+                    UpdateHeadline(busy);
+                    return;
+                }
             }
         }
 
@@ -848,6 +874,7 @@ internal sealed class Engine : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _settle.Stop();
         _hookServer.Dispose();
         foreach (var h in _powerNotifications) Native.UnregisterPowerSettingNotification(h);
         if (_suspendNotification != IntPtr.Zero) Native.UnregisterSuspendResumeNotification(_suspendNotification);
