@@ -165,7 +165,7 @@ public partial class SettingsWindow : Window
         var s = _engine.Settings;
         if (thermal.Available)
         {
-            string text = $"Ahora {thermal.TemperatureC:0} °C · máximo {thermal.MaxSeenC:0} °C · sensor {thermal.SensorName}";
+            string text = $"Ahora {ThermalMonitor.Format(thermal.TemperatureC ?? 0)} · máximo {ThermalMonitor.Format(thermal.MaxSeenC)} · sensor {thermal.SensorName}";
             if (thermal.PassiveLimitPercent is < 100) text += $" · Windows baja la velocidad por calor ({thermal.PassiveLimitPercent:0} %)";
             if (s.ThermalGuard && s.ThermalOnlyOnBattery && !_engine.OnBattery) text += " · en pausa: enchufada";
             ThermalInfo.Text = text;

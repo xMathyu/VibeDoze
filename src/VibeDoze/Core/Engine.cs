@@ -41,6 +41,7 @@ public sealed class PendingAction
 internal sealed class Engine : IDisposable
 {
     private static readonly TimeSpan ThermalCountdown = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ThermalLogInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan TimerCountdown = TimeSpan.FromSeconds(60);
     /// <summary>Lid closed, sleep requested, still running after this long → hibernate (idle standby takes ~1 min).</summary>
     private static readonly TimeSpan SleepEscalation = TimeSpan.FromSeconds(150);
@@ -63,7 +64,11 @@ internal sealed class Engine : IDisposable
 
     private long _tick;
     private DateTime? _hotSinceUtc;
+    private double _hotPeakC;
     private DateTime _thermalSnoozeUntilUtc = DateTime.MinValue;
+    private DateTime _thermalLoggedUtc = DateTime.MinValue;
+    private double? _thermalLogPeakC;
+    private string? _thermalConfigLogged;
     private bool _timerWarned;
     private bool _batteryHold;
     private DateTime? _sleepAttemptUtc;
@@ -128,6 +133,7 @@ internal sealed class Engine : IDisposable
         };
         Log.Info($"VibeDoze iniciado (Modern Standby: {PowerController.Capabilities.ModernStandby}, " +
                  $"hibernación: {PowerController.Capabilities.CanHibernate}, sensor: {_thermal.SensorName ?? "ninguno"})");
+        LogThermalConfig();
     }
 
     /// <summary>Starts the loop. Called after the UI subscribed to the events, so nothing raised early is lost.</summary>
@@ -196,6 +202,7 @@ internal sealed class Engine : IDisposable
     public void SaveSettings()
     {
         SettingsStore.Save(Settings);
+        LogThermalConfig();
         Refresh();
     }
 
@@ -470,23 +477,40 @@ internal sealed class Engine : IDisposable
 
         // 5) Thermal guard: while we keep it awake, or whenever the lid is closed (bag!).
         //    By default only on battery: plugged in, high temperatures are normal (charging, gaming).
-        bool guard = Settings.Enabled && Settings.ThermalGuard && _thermal.Available && now >= _thermalSnoozeUntilUtc
-                     && (want || LidClosed) && (OnBattery || !Settings.ThermalOnlyOnBattery);
+        bool watched = want || LidClosed;
+        string? guardOff = ThermalGuardOff(now);
+        if (watched) LogTemperature(now, guardOff);
+        else _thermalLogPeakC = null;
+        bool guard = watched && guardOff is null;
         if (guard)
         {
-            bool hot = _thermal.TemperatureC >= Settings.ThermalThresholdC
-                       || (LidClosed && _thermal.PassiveLimitPercent is < 50);
+            double temp = _thermal.TemperatureC ?? 0;
+            bool throttled = LidClosed && _thermal.PassiveLimitPercent is < 50;
+            bool hot = temp >= Settings.ThermalThresholdC || throttled;
             if (!hot)
             {
+                if (_hotSinceUtc is { } since && Pending?.Source != ActionSource.Thermal)
+                    Log.Info($"Alerta térmica terminada tras {(now - since).TotalSeconds:0} s, sin llegar a " +
+                             $"{Settings.ThermalSustainSeconds} s (máx {_hotPeakC:0.0} °C, ahora {temp:0.0} °C)");
                 _hotSinceUtc = null;
             }
             else
             {
+                if (_hotSinceUtc is null && Pending?.Source != ActionSource.Thermal)
+                {
+                    _hotPeakC = temp;
+                    string why = throttled && temp < Settings.ThermalThresholdC
+                        ? $"Windows limita el procesador al {_thermal.PassiveLimitPercent:0} % por calor ({temp:0.0} °C)"
+                        : $"{temp:0.0} °C, límite {Settings.ThermalThresholdC} °C";
+                    Log.Info($"Alerta térmica: {why}; {ActionName(Settings.ThermalAction).ToLowerInvariant()} " +
+                             $"si dura {Settings.ThermalSustainSeconds} s");
+                }
                 _hotSinceUtc ??= now;
+                _hotPeakC = Math.Max(_hotPeakC, temp);
                 if (now - _hotSinceUtc >= TimeSpan.FromSeconds(Settings.ThermalSustainSeconds)
                     && Pending?.Source != ActionSource.Thermal)
                 {
-                    string reason = $"Temperatura alta: {_thermal.TemperatureC:0} °C";
+                    string reason = $"Temperatura alta: {ThermalMonitor.Format(_hotPeakC)}";
                     Log.Warn($"{reason} durante {Settings.ThermalSustainSeconds}s (límite {Settings.ThermalThresholdC} °C)");
                     StartAction(Settings.ThermalAction, ActionSource.Thermal, reason,
                         Interactive ? now + ThermalCountdown : now);
@@ -495,6 +519,8 @@ internal sealed class Engine : IDisposable
         }
         else
         {
+            if (_hotSinceUtc is not null && Pending?.Source != ActionSource.Thermal)
+                Log.Info($"Alerta térmica interrumpida: {guardOff ?? "tapa abierta y sin agentes trabajando"}");
             _hotSinceUtc = null;
             if (Pending?.Source == ActionSource.Thermal)
             {
@@ -541,6 +567,45 @@ internal sealed class Engine : IDisposable
         }
 
         UpdateHeadline(busy);
+    }
+
+    /// <summary>Why the thermal guard can't act right now (null: it can).</summary>
+    private string? ThermalGuardOff(DateTime now) =>
+        !Settings.Enabled ? "VibeDoze en pausa"
+        : !Settings.ThermalGuard ? "protección desactivada"
+        : !_thermal.Available ? "sin sensor"
+        : now < _thermalSnoozeUntilUtc ? $"pospuesta hasta las {_thermalSnoozeUntilUtc.ToLocalTime():HH:mm}"
+        : !OnBattery && Settings.ThermalOnlyOnBattery ? "enchufada"
+        : null;
+
+    /// <summary>
+    /// One line a minute while agents work or the lid is closed, with the hottest sample since the previous line:
+    /// enough to tell afterwards why the thermal guard acted or not.
+    /// </summary>
+    private void LogTemperature(DateTime now, string? guardOff)
+    {
+        if (_thermal.TemperatureC is not { } temp) return;
+        _thermalLogPeakC = Math.Max(_thermalLogPeakC ?? temp, temp);
+        if (now - _thermalLoggedUtc < ThermalLogInterval) return;
+        _thermalLoggedUtc = now;
+        string guard = guardOff is null ? $"protección activa (límite {Settings.ThermalThresholdC} °C)" : $"protección en pausa: {guardOff}";
+        string throttle = _thermal.PassiveLimitPercent is < 100 ? $" · Windows limita al {_thermal.PassiveLimitPercent:0} %" : string.Empty;
+        Log.Info($"Temperatura {temp:0.0} °C (pico {_thermalLogPeakC:0.0} °C) · {(OnBattery ? "batería" : "enchufada")} · " +
+                 $"tapa {(LidClosed ? "cerrada" : "abierta")} · {guard}{throttle}");
+        _thermalLogPeakC = null;
+    }
+
+    /// <summary>Logs the thermal guard settings when they change, so the log tells which limit applied at any time.</summary>
+    private void LogThermalConfig()
+    {
+        var s = Settings;
+        string config = !s.ThermalGuard
+            ? "desactivada"
+            : $"{ActionName(s.ThermalAction).ToLowerInvariant()} desde {s.ThermalThresholdC} °C sostenidos {s.ThermalSustainSeconds} s, " +
+              (s.ThermalOnlyOnBattery ? "solo con batería" : "también enchufada");
+        if (config == _thermalConfigLogged) return;
+        _thermalConfigLogged = config;
+        Log.Info($"Protección térmica: {config}");
     }
 
     /// <summary>

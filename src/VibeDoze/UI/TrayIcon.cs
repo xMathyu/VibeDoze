@@ -91,7 +91,7 @@ internal sealed class TrayIcon : IDisposable
 
         var tip = "VibeDoze — " + _engine.Headline;
         if (_engine.TimerDeadlineUtc is { } deadline) tip += $"\nLímite: {Format.Remaining(deadline - DateTime.UtcNow)}";
-        if (_engine.Thermal.TemperatureC is { } t) tip += $"\nTemperatura: {t:0} °C";
+        if (_engine.Thermal.TemperatureC is { } t) tip += $"\nTemperatura: {ThermalMonitor.Format(t)}";
         if (tip.Length > 127) tip = tip[..127];
         if (tip != _tooltip)
         {
@@ -183,7 +183,7 @@ internal sealed class TrayIcon : IDisposable
         var thermal = Check("Protección térmica", s.ThermalGuard, v => s.ThermalGuard = v);
         thermal.ShortcutKeyDisplayString = s.ThermalGuard && s.ThermalOnlyOnBattery && !_engine.OnBattery
             ? "enchufada"
-            : _engine.Thermal.TemperatureC is { } t ? $"{t:0} °C" : null;
+            : _engine.Thermal.TemperatureC is { } t ? ThermalMonitor.Format(t) : null;
         items.Add(thermal);
         items.Add(new WinForms.ToolStripSeparator());
 

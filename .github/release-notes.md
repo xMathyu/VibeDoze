@@ -8,6 +8,8 @@ Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con 
 - **Codex en VS Code ya no mantiene la laptop despierta si no lo usas.** La extensión de Codex arranca un proceso en segundo plano con cada ventana del editor, y su CPU sigue a la interfaz (arranque, abrir el panel, refrescos cada ~4,5 min), no a los turnos. Sin hooks, VibeDoze la leía como trabajo y la sesión aparecía como "Terminó" sin parar. Ahora la extensión de Codex se detecta solo con hooks; si la usas, actívalos en *Ajustes → Agentes*.
 - La detección por CPU (sin hooks) ignora los picos cortos y el primer minuto de cada proceso, que es su arranque.
 - Claude Code y Codex se muestran con sus logos en el panel y en *Ajustes → Agentes*.
+- **Protección térmica: lo que ves es lo que cuenta.** Actúa cuando la temperatura llega al límite o lo supera durante el tiempo configurado. El panel ya no redondea hacia arriba: "60 °C" significa 60,0 o más. Antes, 69,6 °C se veía como 70 y no contaba para un límite de 70.
+- **Registro de temperatura.** Mientras hay agentes trabajando o la tapa está cerrada, el registro (`%LOCALAPPDATA%\VibeDoze\vibedoze.log`) anota la temperatura cada minuto con su pico, si está enchufada, la tapa y si la protección está activa (o por qué no). También anota cada alerta térmica, por qué terminó sin actuar y los cambios de la configuración térmica.
 
 ### Instalación
 

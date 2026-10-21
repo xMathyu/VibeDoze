@@ -80,6 +80,9 @@ internal sealed class ThermalMonitor : IDisposable
 
     public void ResetMax() => MaxSeenC = TemperatureC ?? 0;
 
+    /// <summary>Whole degrees, truncated: "60 °C" on screen means 60.0 or more, so it matches the limit check.</summary>
+    public static string Format(double celsius) => $"{Math.Floor(celsius):0} °C";
+
     private static List<(string Name, double Value)> ReadArray(IntPtr counter)
     {
         var result = new List<(string, double)>();

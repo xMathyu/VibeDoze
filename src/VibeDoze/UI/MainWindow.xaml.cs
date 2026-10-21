@@ -183,7 +183,7 @@ public partial class MainWindow : Window
         OrbCup.Steaming = _engine.Mode is EngineMode.Awake or EngineMode.Countdown;
 
         LidChip.Text = _engine.LidClosed ? "Tapa cerrada" : "Tapa abierta";
-        TempChip.Text = _engine.Thermal.TemperatureC is { } t ? $"{t:0} °C" : "Sin sensor";
+        TempChip.Text = _engine.Thermal.TemperatureC is { } t ? ThermalMonitor.Format(t) : "Sin sensor";
         if (_engine.BatteryPercent is { } pct)
         {
             BatteryChipBorder.Visibility = Visibility.Visible;
