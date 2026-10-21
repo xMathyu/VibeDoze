@@ -9,6 +9,7 @@ Mantiene tu laptop despierta mientras Claude Code o Codex trabajan, incluso con 
 - La detección por CPU (sin hooks) ignora los picos cortos y el primer minuto de cada proceso, que es su arranque.
 - Claude Code y Codex se muestran con sus logos en el panel y en *Ajustes → Agentes*.
 - **Protección térmica al instante.** Apenas la temperatura llega al límite o lo supera, suspende o hiberna, sin esperar: ya no existe la opción *Durante al menos*. Con la tapa cerrada, si la suspensión no entra en 75 s, hiberna. Con la tapa abierta avisa 30 s antes. Al despertar espera unos segundos a saber si abriste la tapa o la enchufaste antes de decidir.
+- Si eliges *Ignorar 15 min* en el aviso de temperatura, la protección vuelve en cuanto cierras la tapa (o, con la tapa ya cerrada y un monitor externo, cuando se apaga la pantalla). Antes quedaba en pausa los 15 min aunque guardaras la laptop en la funda.
 - El panel ya no redondea la temperatura hacia arriba: "60 °C" significa 60,0 o más, igual que el límite. Antes, 69,6 °C se veía como 70 y no contaba para un límite de 70.
 - **Registro de temperatura.** Mientras hay agentes trabajando o la tapa está cerrada, el registro (`%LOCALAPPDATA%\VibeDoze\vibedoze.log`) anota la temperatura cada minuto con su pico, si está enchufada, la tapa y si la protección está activa (o por qué no). También anota cada vez que la protección actúa y los cambios de la configuración térmica.
 

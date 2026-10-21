@@ -262,7 +262,7 @@ internal sealed class Engine : IDisposable
                 break;
             case ActionSource.Thermal:
                 _thermalSnoozeUntilUtc = DateTime.UtcNow.AddMinutes(15);
-                Log.Warn("Protección térmica pospuesta 15 min por el usuario");
+                Log.Warn("Protección térmica pospuesta 15 min por el usuario (o hasta que cierre la tapa)");
                 break;
         }
         Refresh();
@@ -873,6 +873,7 @@ internal sealed class Engine : IDisposable
         if (LidClosed == closed && _tick > 0) return;
         LidClosed = closed;
         Log.Info(closed ? "Tapa cerrada" : "Tapa abierta");
+        if (closed) EndThermalSnooze("tapa cerrada");
         if (!closed)
         {
             // The user is back: no pending escalation, no shortened idle timeout, no hold.
@@ -893,6 +894,7 @@ internal sealed class Engine : IDisposable
         if (DisplayOn == on) return;
         DisplayOn = on;
         _displayOnSinceUtc = on ? DateTime.UtcNow : null;
+        if (!on && LidClosed) EndThermalSnooze("tapa cerrada y pantalla apagada");
         if (on && !LidClosed)
         {
             // Someone woke the screen: drop the 60 s idle timeout right away. Leaving the "hold" state waits
@@ -901,6 +903,17 @@ internal sealed class Engine : IDisposable
             if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
         }
         Refresh();
+    }
+
+    /// <summary>
+    /// "Ignore 15 min" only holds while someone is at the laptop: once nobody can see it (lid closed, or the
+    /// screen off with the lid closed: it may be going into a bag) the thermal guard is back at once.
+    /// </summary>
+    private void EndThermalSnooze(string why)
+    {
+        if (DateTime.UtcNow >= _thermalSnoozeUntilUtc) return;
+        _thermalSnoozeUntilUtc = DateTime.MinValue;
+        Log.Info($"Protección térmica reactivada: {why}");
     }
 
     private void OnResume(bool byUser)
