@@ -408,12 +408,6 @@
                                 </Border>
                                 <Border Style="{StaticResource VD.RowNext}">
                                     <DockPanel>
-                                        <ComboBox x:Name="SustainCombo" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
-                                        <TextBlock Text="Durante al menos" Style="{StaticResource VD.RowTitle}" VerticalAlignment="Center" />
-                                    </DockPanel>
-                                </Border>
-                                <Border Style="{StaticResource VD.RowNext}">
-                                    <DockPanel>
                                         <ComboBox x:Name="ThermalAction" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
                                         <TextBlock Text="Entonces" Style="{StaticResource VD.RowTitle}" VerticalAlignment="Center" />
                                     </DockPanel>

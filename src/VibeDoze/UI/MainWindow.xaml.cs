@@ -326,12 +326,11 @@ public partial class MainWindow : Window
         BatterySwitch.IsChecked = s.BatteryGuard;
 
         string when = s.ThermalOnlyOnBattery ? "Con batería" : "Siempre";
-        string sustain = s.ThermalSustainSeconds < 60 ? $"{s.ThermalSustainSeconds} s" : $"{s.ThermalSustainSeconds / 60} min";
         ThermalSub.Text = !_engine.Thermal.Available
             ? "Sin sensor de temperatura en este equipo"
             : s.ThermalGuard && s.ThermalOnlyOnBattery && !_engine.OnBattery
                 ? $"En pausa: enchufada · límite {s.ThermalThresholdC} °C"
-                : $"{when} · más de {s.ThermalThresholdC} °C por {sustain}";
+                : $"{when} · al llegar a {s.ThermalThresholdC} °C";
         BatterySub.Text = $"Deja de mantenerla despierta al {s.BatteryMinPercent} %";
     }
 

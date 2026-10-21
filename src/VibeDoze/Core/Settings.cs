@@ -45,7 +45,6 @@ public sealed class AppSettings
     // ── Protection ──
     public bool ThermalGuard { get; set; } = true;
     public int ThermalThresholdC { get; set; } = 80;
-    public int ThermalSustainSeconds { get; set; } = 60;
     public SystemAction ThermalAction { get; set; } = SystemAction.Sleep;
     /// <summary>Plugged in (charging, gaming…) running hot is normal: only guard while on battery.</summary>
     public bool ThermalOnlyOnBattery { get; set; } = true;
@@ -113,7 +112,6 @@ internal static class SettingsStore
     {
         s.FinishGraceMinutes = Math.Clamp(s.FinishGraceMinutes, 0, 60);
         s.ThermalThresholdC = Math.Clamp(s.ThermalThresholdC, 50, 105);
-        s.ThermalSustainSeconds = Math.Clamp(s.ThermalSustainSeconds, 10, 600);
         s.BatteryMinPercent = Math.Clamp(s.BatteryMinPercent, 3, 50);
         s.CustomTimerMinutes = Math.Clamp(s.CustomTimerMinutes, 1, 24 * 60);
         s.CpuActiveThresholdPercent = Math.Clamp(s.CpuActiveThresholdPercent, 0.1, 50);

@@ -13,7 +13,6 @@ namespace VibeDoze.UI;
 public partial class SettingsWindow : Window
 {
     private static readonly int[] GraceOptions = { 0, 1, 2, 5, 10, 15 };
-    private static readonly int[] SustainOptions = { 30, 60, 120, 300 };
     private static readonly int[] BatteryOptions = { 5, 10, 15, 20, 30 };
 
     private readonly Engine _engine;
@@ -103,7 +102,6 @@ public partial class SettingsWindow : Window
             Select(TimerAction, s.TimerAction);
             Select(ThermalAction, s.ThermalAction);
             Select(GraceCombo, s.FinishGraceMinutes, m => $"{m} min");
-            Select(SustainCombo, s.ThermalSustainSeconds, sec => $"{sec} s");
             Select(BatteryCombo, s.BatteryMinPercent, pct => $"{pct} %");
             if (!ThresholdSlider.IsMouseCaptureWithin && !ThresholdSlider.IsKeyboardFocusWithin)
                 ThresholdSlider.Value = s.ThermalThresholdC;
@@ -265,7 +263,6 @@ public partial class SettingsWindow : Window
         s.TimerAction = Selected(TimerAction, s.TimerAction);
         s.ThermalAction = Selected(ThermalAction, s.ThermalAction);
         s.FinishGraceMinutes = Selected(GraceCombo, s.FinishGraceMinutes);
-        s.ThermalSustainSeconds = Selected(SustainCombo, s.ThermalSustainSeconds);
         s.BatteryMinPercent = Selected(BatteryCombo, s.BatteryMinPercent);
         s.ThermalThresholdC = (int)ThresholdSlider.Value;
         _engine.SaveSettings();
@@ -393,8 +390,6 @@ public partial class SettingsWindow : Window
 
         foreach (int m in GraceOptions)
             GraceCombo.Items.Add(new ComboBoxItem { Content = m == 0 ? "Sin margen" : $"{m} min", Tag = m });
-        foreach (int sec in SustainOptions)
-            SustainCombo.Items.Add(new ComboBoxItem { Content = sec < 60 ? $"{sec} s" : $"{sec / 60} min", Tag = sec });
         foreach (int pct in BatteryOptions)
             BatteryCombo.Items.Add(new ComboBoxItem { Content = $"{pct} %", Tag = pct });
     }

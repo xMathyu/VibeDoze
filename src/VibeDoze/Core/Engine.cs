@@ -45,6 +45,14 @@ internal sealed class Engine : IDisposable
     private static readonly TimeSpan TimerCountdown = TimeSpan.FromSeconds(60);
     /// <summary>Lid closed, sleep requested, still running after this long → hibernate (idle standby takes ~1 min).</summary>
     private static readonly TimeSpan SleepEscalation = TimeSpan.FromSeconds(150);
+    /// <summary>The same for a sleep caused by heat: it can't wait as long.</summary>
+    private static readonly TimeSpan ThermalSleepEscalation = TimeSpan.FromSeconds(75);
+    /// <summary>Still hot this long after a thermal action (it didn't take) → act again.</summary>
+    private static readonly TimeSpan ThermalRetry = TimeSpan.FromMinutes(2);
+    /// <summary>Right after waking up the lid / screen / charger state may still be the old one: wait for the messages.</summary>
+    private static readonly TimeSpan ResumeSettle = TimeSpan.FromSeconds(5);
+    /// <summary>A gap this long between ticks means the app was frozen (suspended).</summary>
+    private static readonly TimeSpan TickGap = TimeSpan.FromSeconds(10);
 
     private readonly PowerController _power = new();
     private readonly SlashLight _slash;
@@ -63,8 +71,10 @@ internal sealed class Engine : IDisposable
     private readonly IntPtr _suspendNotification;
 
     private long _tick;
-    private DateTime? _hotSinceUtc;
-    private double _hotPeakC;
+    private DateTime _lastTickUtc = DateTime.MinValue;
+    private DateTime _wokeUtc = DateTime.MinValue;
+    private DateTime _thermalActedUtc = DateTime.MinValue;
+    private TimeSpan _sleepEscalation = SleepEscalation;
     private DateTime _thermalSnoozeUntilUtc = DateTime.MinValue;
     private DateTime _thermalLoggedUtc = DateTime.MinValue;
     private double? _thermalLogPeakC;
@@ -252,7 +262,6 @@ internal sealed class Engine : IDisposable
                 break;
             case ActionSource.Thermal:
                 _thermalSnoozeUntilUtc = DateTime.UtcNow.AddMinutes(15);
-                _hotSinceUtc = null;
                 Log.Warn("Protección térmica pospuesta 15 min por el usuario");
                 break;
         }
@@ -310,6 +319,10 @@ internal sealed class Engine : IDisposable
         var now = DateTime.UtcNow;
         try
         {
+            // After a freeze (suspended) this tick can run before the resume, lid and charger messages arrive.
+            if (now - _lastTickUtc > TickGap) _wokeUtc = now;
+            _lastTickUtc = now;
+
             while (_inbox.TryDequeue(out var message))
                 OnHook(message, now);
 
@@ -475,58 +488,31 @@ internal sealed class Engine : IDisposable
                 StartAction(Settings.TimerAction, ActionSource.Timer, "Se alcanzó el límite de tiempo", deadline);
         }
 
-        // 5) Thermal guard: while we keep it awake, or whenever the lid is closed (bag!).
-        //    By default only on battery: plugged in, high temperatures are normal (charging, gaming).
+        // 5) Thermal guard: while we keep it awake, or whenever the lid is closed (bag!). It acts on the first
+        //    reading at or over the limit, no waiting. By default only on battery: plugged in, high temperatures
+        //    are normal (charging, gaming).
         bool watched = want || LidClosed;
         string? guardOff = ThermalGuardOff(now);
         if (watched) LogTemperature(now, guardOff);
         else _thermalLogPeakC = null;
-        bool guard = watched && guardOff is null;
-        if (guard)
+        if (watched && guardOff is null)
         {
             double temp = _thermal.TemperatureC ?? 0;
+            bool hot = temp >= Settings.ThermalThresholdC;
             bool throttled = LidClosed && _thermal.PassiveLimitPercent is < 50;
-            bool hot = temp >= Settings.ThermalThresholdC || throttled;
-            if (!hot)
+            if ((hot || throttled) && Pending?.Source != ActionSource.Thermal && now - _thermalActedUtc >= ThermalRetry)
             {
-                if (_hotSinceUtc is { } since && Pending?.Source != ActionSource.Thermal)
-                    Log.Info($"Alerta térmica terminada tras {(now - since).TotalSeconds:0} s, sin llegar a " +
-                             $"{Settings.ThermalSustainSeconds} s (máx {_hotPeakC:0.0} °C, ahora {temp:0.0} °C)");
-                _hotSinceUtc = null;
-            }
-            else
-            {
-                if (_hotSinceUtc is null && Pending?.Source != ActionSource.Thermal)
-                {
-                    _hotPeakC = temp;
-                    string why = throttled && temp < Settings.ThermalThresholdC
-                        ? $"Windows limita el procesador al {_thermal.PassiveLimitPercent:0} % por calor ({temp:0.0} °C)"
-                        : $"{temp:0.0} °C, límite {Settings.ThermalThresholdC} °C";
-                    Log.Info($"Alerta térmica: {why}; {ActionName(Settings.ThermalAction).ToLowerInvariant()} " +
-                             $"si dura {Settings.ThermalSustainSeconds} s");
-                }
-                _hotSinceUtc ??= now;
-                _hotPeakC = Math.Max(_hotPeakC, temp);
-                if (now - _hotSinceUtc >= TimeSpan.FromSeconds(Settings.ThermalSustainSeconds)
-                    && Pending?.Source != ActionSource.Thermal)
-                {
-                    string reason = $"Temperatura alta: {ThermalMonitor.Format(_hotPeakC)}";
-                    Log.Warn($"{reason} durante {Settings.ThermalSustainSeconds}s (límite {Settings.ThermalThresholdC} °C)");
-                    StartAction(Settings.ThermalAction, ActionSource.Thermal, reason,
-                        Interactive ? now + ThermalCountdown : now);
-                }
+                string reason = hot
+                    ? $"Temperatura alta: {ThermalMonitor.Format(temp)}"
+                    : $"Windows limita el procesador al {_thermal.PassiveLimitPercent:0} % por calor";
+                Log.Warn($"{reason} ({temp:0.0} °C, límite {Settings.ThermalThresholdC} °C)");
+                StartAction(Settings.ThermalAction, ActionSource.Thermal, reason, Interactive ? now + ThermalCountdown : now);
             }
         }
-        else
+        else if (Pending?.Source == ActionSource.Thermal)
         {
-            if (_hotSinceUtc is not null && Pending?.Source != ActionSource.Thermal)
-                Log.Info($"Alerta térmica interrumpida: {guardOff ?? "tapa abierta y sin agentes trabajando"}");
-            _hotSinceUtc = null;
-            if (Pending?.Source == ActionSource.Thermal)
-            {
-                Log.Info("La protección térmica ya no aplica (enchufada / en pausa): se cancela la acción");
-                Pending = null;
-            }
+            Log.Info($"La protección térmica ya no aplica ({guardOff ?? "tapa abierta y sin agentes"}): se cancela la acción");
+            Pending = null;
         }
 
         // 6) A pending action the user hasn't seen (scheduled while nobody was looking): show it now,
@@ -552,8 +538,8 @@ internal sealed class Engine : IDisposable
         if (_sleepAttemptUtc is { } attempt && !_suspendObserved)
         {
             var since = now - attempt;
-            if (since > SleepEscalation + TimeSpan.FromMinutes(2)) _sleepAttemptUtc = null;
-            else if (since >= SleepEscalation && Bagged)
+            if (since > _sleepEscalation + TimeSpan.FromMinutes(2)) _sleepAttemptUtc = null;
+            else if (since >= _sleepEscalation && Bagged)
             {
                 _sleepAttemptUtc = null;
                 if (PowerController.Capabilities.CanHibernate)
@@ -576,6 +562,7 @@ internal sealed class Engine : IDisposable
         : !_thermal.Available ? "sin sensor"
         : now < _thermalSnoozeUntilUtc ? $"pospuesta hasta las {_thermalSnoozeUntilUtc.ToLocalTime():HH:mm}"
         : !OnBattery && Settings.ThermalOnlyOnBattery ? "enchufada"
+        : now - _wokeUtc < ResumeSettle ? "acaba de despertar"
         : null;
 
     /// <summary>
@@ -601,7 +588,7 @@ internal sealed class Engine : IDisposable
         var s = Settings;
         string config = !s.ThermalGuard
             ? "desactivada"
-            : $"{ActionName(s.ThermalAction).ToLowerInvariant()} desde {s.ThermalThresholdC} °C sostenidos {s.ThermalSustainSeconds} s, " +
+            : $"{ActionName(s.ThermalAction).ToLowerInvariant()} al llegar a {s.ThermalThresholdC} °C, " +
               (s.ThermalOnlyOnBattery ? "solo con batería" : "también enchufada");
         if (config == _thermalConfigLogged) return;
         _thermalConfigLogged = config;
@@ -659,8 +646,8 @@ internal sealed class Engine : IDisposable
     {
         Pending = null;
         if (p.Source == ActionSource.Timer) ClearTimerCore();
-        _hotSinceUtc = null;
         _actionExecutedUtc = DateTime.UtcNow;
+        if (p.Source == ActionSource.Thermal) _thermalActedUtc = _actionExecutedUtc;
 
         // Stay out of the way until the user is back (lid opened / screen on / resumed by the user).
         HoldReason = p.Source switch
@@ -680,6 +667,7 @@ internal sealed class Engine : IDisposable
             RaiseNotify("VibeDoze", $"{p.Reason}. {ActionName(p.Action)} para proteger la laptop.");
         Log.Info($"Ejecutando: {ActionName(p.Action)} — {p.Reason}");
         _slash.Release(TimeSpan.FromSeconds(1), keepDark: true); // the animation ends before suspending
+        _sleepEscalation = p.Source == ActionSource.Thermal ? ThermalSleepEscalation : SleepEscalation;
         RunPowerAction(p.Action);
     }
 
@@ -922,7 +910,7 @@ internal sealed class Engine : IDisposable
         if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
         _suspendObserved = true;
         _sleepAttemptUtc = null;
-        _hotSinceUtc = null;
+        _wokeUtc = DateTime.UtcNow;
         if (Pending is not null && Pending.Source != ActionSource.Timer) Pending = null;
         if (TimerDeadlineUtc is { } d && d <= DateTime.UtcNow)
         {
