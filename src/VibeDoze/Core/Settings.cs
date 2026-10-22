@@ -26,6 +26,12 @@ public sealed class AppSettings
     public bool WatchOthers { get; set; } = false;
     /// <summary>Comma separated: exe names (opencode) or command-line fragments for node/bun/python agents (@google/gemini-cli).</summary>
     public string OtherAgents { get; set; } = "opencode, aider, @google/gemini-cli, @github/copilot";
+    /// <summary>Agents on a server reached over SSH send their hooks through a forwarded port (see RemoteHookServer).</summary>
+    public bool RemoteEnabled { get; set; } = false;
+    /// <summary>Loopback port for those hooks: the same number on both ends of the RemoteForward.</summary>
+    public int RemotePort { get; set; } = RemoteSetup.DefaultPort;
+    /// <summary>Secret the server's hook script sends with every event. Made the first time RemoteEnabled is on.</summary>
+    public string RemoteToken { get; set; } = string.Empty;
 
     // ── Lid ──
     public bool KeepRunningWithLidClosed { get; set; } = true;
@@ -119,6 +125,8 @@ internal static class SettingsStore
         s.HookStaleMinutes = Math.Clamp(s.HookStaleMinutes, 2, 240);
         s.HookHardCapMinutes = Math.Clamp(s.HookHardCapMinutes, 10, 480);
         s.OtherAgents ??= string.Empty;
+        if (s.RemotePort is < 1024 or > 65535) s.RemotePort = RemoteSetup.DefaultPort;
+        if (s.RemoteToken is null || s.RemoteToken.Any(c => !char.IsAsciiLetterOrDigit(c))) s.RemoteToken = string.Empty; // remade on use
         if (string.IsNullOrWhiteSpace(s.UpdateRepository) || s.UpdateRepository.Count(c => c == '/') != 1)
             s.UpdateRepository = "xMathyu/VibeDoze";
         return s;

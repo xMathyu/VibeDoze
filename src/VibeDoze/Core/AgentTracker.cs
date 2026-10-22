@@ -28,6 +28,8 @@ internal sealed class AgentProcess
     public string? ExePath { get; set; }
     /// <summary>Codex's app-server (see AgentRules.IsServer): only its hooks tell when it works.</summary>
     public bool Server { get; set; }
+    /// <summary>Runs on a server reached over SSH (Host is its name): only its hooks reach us, no process or CPU.</summary>
+    public bool Remote { get; set; }
     public double CpuPercent { get; set; }
     public DateTime FirstSeenUtc { get; init; }
     /// <summary>When the process started (MinValue if unknown).</summary>
@@ -155,17 +157,25 @@ internal sealed class AgentTracker
     public void OnHook(HookMessage m, DateTime now)
     {
         var kind = m.Agent == "codex" ? AgentKind.Codex : AgentKind.Claude;
-        LastHookByKind[kind] = now;
+        if (m.RemoteHost is null) LastHookByKind[kind] = now; // tells whether this laptop's hooks work
 
-        string key = m.AgentPid != 0
-            ? AgentScanner.MakeKey(m.AgentPid, m.AgentCreation)
+        string key = m.RemoteHost is { } host ? $"ssh:{host}:{m.Agent}:{m.SessionId ?? "default"}"
+            : m.AgentPid != 0 ? AgentScanner.MakeKey(m.AgentPid, m.AgentCreation)
             : $"hook:{m.Agent}:{m.SessionId ?? "default"}";
         if (_aliases.TryGetValue(key, out var root)) key = root;
 
         if (!_procs.TryGetValue(key, out var p))
         {
             p = new AgentProcess { Key = key, Pid = m.AgentPid, Kind = kind, FirstSeenUtc = now };
-            if (m.AgentPid == 0) p.Host = "desconocido";
+            if (m.RemoteHost is not null)
+            {
+                p.Host = m.RemoteHost;
+                p.Remote = true;
+            }
+            else if (m.AgentPid == 0)
+            {
+                p.Host = "desconocido";
+            }
             _procs[key] = p;
         }
         p.LastHookUtc = now;
@@ -174,6 +184,7 @@ internal sealed class AgentTracker
         if (IsEvent(m.Event, "SessionEnd"))
         {
             p.Conversations.Remove(convId);
+            if (p.Remote && p.Conversations.Count == 0) _procs.Remove(key); // no process left to show
             return;
         }
 
@@ -190,7 +201,8 @@ internal sealed class AgentTracker
         if (MapEvent(m.Event, m.NotificationType) is not { } next) return;
         if (next != conv.State)
         {
-            Log.Info($"{AgentRules.DisplayName(kind)} (pid {m.AgentPid}): {conv.State} → {next} [{m.Event}]");
+            string where = m.RemoteHost is { } h ? $"SSH {h}" : $"pid {m.AgentPid}";
+            Log.Info($"{AgentRules.DisplayName(kind)} ({where}): {conv.State} → {next} [{m.Event}]");
             if (conv.State == TurnState.Working) conv.LastWorkingUtc = now;
             conv.State = next;
             conv.StateSinceUtc = now;
@@ -199,7 +211,8 @@ internal sealed class AgentTracker
     }
 
     /// <param name="hookKinds">Kinds whose hooks are installed and have reported at least once.</param>
-    public void Evaluate(DateTime now, AppSettings settings, IReadOnlySet<AgentKind> hookKinds)
+    /// <param name="lastInputUtc">Last keyboard or mouse input on this laptop.</param>
+    public void Evaluate(DateTime now, AppSettings settings, IReadOnlySet<AgentKind> hookKinds, DateTime lastInputUtc)
     {
         var stale = TimeSpan.FromMinutes(settings.HookStaleMinutes);
         var hardCap = TimeSpan.FromMinutes(settings.HookHardCapMinutes);
@@ -210,6 +223,15 @@ internal sealed class AgentTracker
 
             foreach (var conv in p.Conversations.Values)
             {
+                // Over SSH no hook arrives between answering a permission prompt and the end of the tool, and
+                // there's no CPU to read: using this laptop after the prompt is taken as the answer. Otherwise
+                // a long command could outlast the grace and the laptop would sleep in the middle of it.
+                if (conv.State == TurnState.Waiting && p.Remote && lastInputUtc > conv.StateSinceUtc.AddSeconds(1))
+                {
+                    conv.State = TurnState.Working;
+                    conv.StateSinceUtc = conv.LastEventUtc = lastInputUtc;
+                }
+
                 // Permission prompt answered → the tool runs and the tree uses CPU again. Require sustained
                 // CPU (2+ scans) so an idle MCP server or watcher in the tree doesn't fake it.
                 if (conv.State == TurnState.Waiting && p.CpuActiveStreak >= 2

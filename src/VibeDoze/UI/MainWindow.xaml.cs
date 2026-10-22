@@ -281,7 +281,7 @@ public partial class MainWindow : Window
         }
 
         string subtitle = a.Project ?? AgentLocation(a);
-        subtitle += a.HookDriven ? " · hooks" : a.Server ? " · sin hooks" : " · CPU";
+        subtitle += a.Remote ? " · SSH" : a.HookDriven ? " · hooks" : a.Server ? " · sin hooks" : " · CPU";
         return new SessionRow
         {
             Title = $"{AgentRules.DisplayName(a.Kind)} · {a.Host}",
@@ -293,6 +293,7 @@ public partial class MainWindow : Window
 
     private static string AgentLocation(AgentProcess a)
     {
+        if (a.Remote) return "servidor";
         if (a.ExePath is null) return $"PID {a.Pid}";
         var path = a.ExePath.ToLowerInvariant();
         if (path.Contains(@"\extensions\")) return "extensión";

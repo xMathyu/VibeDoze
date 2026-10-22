@@ -60,6 +60,7 @@ internal sealed class Engine : IDisposable
     private readonly AgentTracker _tracker = new();
     private readonly ThermalMonitor _thermal = new();
     private readonly HookServer _hookServer;
+    private readonly RemoteHookServer _remote;
     private readonly ConcurrentQueue<HookMessage> _inbox = new();
     /// <summary>Agent kinds whose hooks are installed and have reported at least once.</summary>
     private readonly HashSet<AgentKind> _hookKinds = new();
@@ -126,6 +127,8 @@ internal sealed class Engine : IDisposable
         _suspendNotification = Native.RegisterSuspendResumeNotification(_window.Handle, Native.DEVICE_NOTIFY_WINDOW_HANDLE);
 
         _hookServer = new HookServer(m => _inbox.Enqueue(m));
+        _remote = new RemoteHookServer(m => _inbox.Enqueue(m));
+        SyncRemote();
 
         RepairIntegrations();
 
@@ -158,6 +161,7 @@ internal sealed class Engine : IDisposable
     public AppSettings Settings { get; }
     public ClaudeIntegration ClaudeHooks { get; } = new();
     public CodexIntegration CodexHooks { get; } = new();
+    public RemoteHookServer Remote => _remote;
     public ThermalMonitor Thermal => _thermal;
 
     public bool LidClosed { get; private set; }
@@ -211,9 +215,21 @@ internal sealed class Engine : IDisposable
 
     public void SaveSettings()
     {
+        SyncRemote();
         SettingsStore.Save(Settings);
         LogThermalConfig();
         Refresh();
+    }
+
+    /// <summary>Listens for agents on a server over SSH while that's on; the token is made the first time.</summary>
+    private void SyncRemote()
+    {
+        if (Settings.RemoteEnabled && string.IsNullOrEmpty(Settings.RemoteToken))
+        {
+            Settings.RemoteToken = RemoteHookServer.NewToken();
+            SettingsStore.Save(Settings);
+        }
+        _remote.Configure(Settings.RemoteEnabled ? Settings.RemotePort : 0, Settings.RemoteToken);
     }
 
     public void SetManualAwake(bool on)
@@ -331,7 +347,7 @@ internal sealed class Engine : IDisposable
             _tick++;
 
             ReadBattery();
-            _tracker.Evaluate(now, Settings, _hookKinds);
+            _tracker.Evaluate(now, Settings, _hookKinds, Native.LastInputUtc());
             Evaluate(now);
             UpdateSlash(now);
         }
@@ -345,6 +361,7 @@ internal sealed class Engine : IDisposable
     private void OnHook(HookMessage m, DateTime now)
     {
         _tracker.OnHook(m, now);
+        if (m.RemoteHost is not null) return; // says nothing about this laptop's hooks
         bool codex = m.Agent == "codex";
         if (codex && !Settings.CodexHooksVerified)
         {
@@ -942,6 +959,7 @@ internal sealed class Engine : IDisposable
         _timer.Stop();
         _settle.Stop();
         _hookServer.Dispose();
+        _remote.Dispose();
         foreach (var h in _powerNotifications) Native.UnregisterPowerSettingNotification(h);
         if (_suspendNotification != IntPtr.Zero) Native.UnregisterSuspendResumeNotification(_suspendNotification);
         _slash.Dispose(keepDark: DateTime.UtcNow < _sessionEndingUntilUtc);

@@ -243,6 +243,53 @@
                     </Border>
                     <TextBlock Style="{StaticResource VD.Caption}" Margin="4,8,0,0"
                                Text="Sin hooks, VibeDoze detecta el trabajo por uso de CPU, salvo en la extensión de Codex, que necesita hooks. Con hooks sabe exactamente cuándo empieza y termina cada respuesta." />
+
+                    <TextBlock Text="Agentes en un servidor (SSH)" Style="{StaticResource VD.GroupTitle}" Margin="4,22,0,8" />
+                    <Border Style="{StaticResource VD.GroupCard}">
+                        <StackPanel>
+                            <Border Style="{StaticResource VD.Row}">
+                                <DockPanel>
+                                    <CheckBox x:Name="RemoteSwitch" DockPanel.Dock="Right" Style="{StaticResource VD.Switch}" Margin="12,0,0,0" Click="OnChanged" AutomationProperties.Name="Agentes en un servidor por SSH" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Recibir sus hooks por SSH" Style="{StaticResource VD.RowTitle}" />
+                                        <TextBlock Text="Para Claude Code o Codex instalados en otra máquina (una instancia EC2, un servidor) a la que entras por SSH desde esta laptop, en la terminal o con VS Code Remote-SSH." Style="{StaticResource VD.Caption}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <StackPanel x:Name="RemoteSteps">
+                                <Border Style="{StaticResource VD.RowNext}">
+                                    <DockPanel>
+                                        <Button x:Name="CopyTunnelButton" DockPanel.Dock="Right" Content="Copiar" Style="{StaticResource VD.CapsuleFill}" MinWidth="84" Margin="12,0,0,0" Click="OnCopyTunnel" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="1. El túnel, en tu ~/.ssh/config" Style="{StaticResource VD.RowTitle}" />
+                                            <TextBlock Text="Agrega esta línea bajo el Host del servidor y vuelve a conectarte." Style="{StaticResource VD.Caption}" />
+                                            <TextBlock x:Name="RemoteTunnelText" Style="{StaticResource VD.Code}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                                <Border Style="{StaticResource VD.RowNext}">
+                                    <DockPanel>
+                                        <Button x:Name="CopyInstallButton" DockPanel.Dock="Right" Content="Copiar" Style="{StaticResource VD.CapsuleFill}" MinWidth="84" Margin="12,0,0,0" Click="OnCopyInstall" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="2. Los hooks, en el servidor" Style="{StaticResource VD.RowTitle}" />
+                                            <TextBlock Text="Con esa conexión abierta, pega este comando en el servidor. Instala los hooks de Claude Code, y los de Codex si está." Style="{StaticResource VD.Caption}" />
+                                            <TextBlock x:Name="RemoteInstallText" Style="{StaticResource VD.Code}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                                <Border Style="{StaticResource VD.RowNext}">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Estado" Style="{StaticResource VD.RowTitle}" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <Ellipse x:Name="RemoteDot" Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="RemoteStatus" Style="{StaticResource VD.Caption}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="RemoteFootnote" Style="{StaticResource VD.Caption}" Margin="4,8,0,0" />
                 </StackPanel>
 
                 <!-- Lid and power -->

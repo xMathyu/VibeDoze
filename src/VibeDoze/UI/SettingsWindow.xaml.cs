@@ -21,6 +21,8 @@ public partial class SettingsWindow : Window
     private DateTime _integrationsCheckedUtc = DateTime.MinValue;
     private IntegrationStatus _claudeStatus, _codexStatus;
     private string? _integrationError;
+    private Button? _copied;
+    private DateTime _copiedUntilUtc;
 
     internal SettingsWindow(Engine engine, App app)
     {
@@ -70,6 +72,8 @@ public partial class SettingsWindow : Window
         if (IsVisible) Render();
     }
 
+    internal void RenderNow() => Render();
+
     // ───────────── Rendering ─────────────
 
     private void Render()
@@ -84,6 +88,7 @@ public partial class SettingsWindow : Window
             ClaudeSwitch.IsChecked = s.WatchClaude;
             CodexSwitch.IsChecked = s.WatchCodex;
             OthersSwitch.IsChecked = s.WatchOthers;
+            RemoteSwitch.IsChecked = s.RemoteEnabled;
             LidSwitch.IsChecked = s.KeepRunningWithLidClosed;
             DisplaySwitch.IsChecked = s.KeepDisplayOn;
             SlashRow.Visibility = SlashLight.Present ? Visibility.Visible : Visibility.Collapsed;
@@ -120,6 +125,7 @@ public partial class SettingsWindow : Window
             RenderTimer();
             RenderThermal();
             RenderIntegrations();
+            RenderRemote(agents);
             RenderUpdates();
         }
         finally
@@ -131,13 +137,46 @@ public partial class SettingsWindow : Window
     private string AgentSummary(AgentKind kind, IReadOnlyList<AgentProcess> agents)
     {
         var mine = agents.Where(a => a.Kind == kind).ToList();
+        var local = mine.Where(a => !a.Remote).ToList(); // the detection below is this laptop's
         string detection = _engine.HookSeen(kind) ? "detección por hooks"
-            : mine.Count > 0 && mine.All(a => a.Server) ? "sin hooks"
+            : local.Count > 0 && local.All(a => a.Server) ? "sin hooks"
             : "detección por CPU";
         if (mine.Count == 0) return $"No está abierto · {detection}";
         int working = mine.Count(a => a.Working);
         string open = mine.Count == 1 ? "1 sesión" : $"{mine.Count} sesiones";
+        int remote = mine.Count - local.Count;
+        if (remote > 0) open += remote == mine.Count ? " por SSH" : $" ({remote} por SSH)";
         return working > 0 ? $"{open} · {working} trabajando · {detection}" : $"{open} · {detection}";
+    }
+
+    private void RenderRemote(IReadOnlyList<AgentProcess> agents)
+    {
+        var s = _engine.Settings;
+        var remote = _engine.Remote;
+        RemoteSteps.Visibility = s.RemoteEnabled ? Visibility.Visible : Visibility.Collapsed;
+        RemoteFootnote.Visibility = RemoteSteps.Visibility;
+        if (!s.RemoteEnabled) return;
+
+        int port = s.RemotePort;
+        RemoteTunnelText.Text = RemoteSetup.TunnelLine(port);
+        // The token stays out of sight (screenshots); "Copiar" copies the whole command.
+        string shown = s.RemoteToken.Length > 4 ? s.RemoteToken[..4] + "…" : "…";
+        RemoteInstallText.Text = RemoteSetup.InstallCommand(port, shown);
+        bool copied = DateTime.UtcNow < _copiedUntilUtc;
+        CopyTunnelButton.Content = copied && _copied == CopyTunnelButton ? "Copiado" : "Copiar";
+        CopyInstallButton.Content = copied && _copied == CopyInstallButton ? "Copiado" : "Copiar";
+
+        int sessions = agents.Count(a => a.Remote);
+        string open = sessions switch { 0 => string.Empty, 1 => "1 sesión · ", _ => $"{sessions} sesiones · " };
+        var (text, dot) = remote.Error is { } error ? ($"{error}. Cambia RemotePort en Ajustes avanzados.", "VD.Red")
+            : remote.ListeningPort is null ? ("Iniciando…", "VD.Dim")
+            : remote.LastContactUtc is { } last ? ($"{open}último aviso de {remote.LastHost} {Format.Since(last)}", "VD.GreenDot")
+            : ($"Esperando al servidor · escuchando en 127.0.0.1:{remote.ListeningPort}", "VD.Orange");
+        RemoteStatus.Text = text;
+        RemoteDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dot);
+        RemoteFootnote.Text = $"Sin ~/.ssh/config, conéctate con ssh -R {port}:127.0.0.1:{port} usuario@servidor. " +
+                              "Si el SSH se corta, los avisos dejan de llegar y el turno se da por terminado a los " +
+                              $"{s.HookStaleMinutes} min. Con tmux en el servidor, el agente sigue aunque la laptop duerma.";
     }
 
     private void RenderTimer()
@@ -251,6 +290,7 @@ public partial class SettingsWindow : Window
         s.WatchClaude = ClaudeSwitch.IsChecked == true;
         s.WatchCodex = CodexSwitch.IsChecked == true;
         s.WatchOthers = OthersSwitch.IsChecked == true;
+        s.RemoteEnabled = RemoteSwitch.IsChecked == true;
         s.KeepRunningWithLidClosed = LidSwitch.IsChecked == true;
         s.KeepDisplayOn = DisplaySwitch.IsChecked == true;
         s.SlashWhileLidClosed = SlashSwitch.IsChecked == true;
@@ -350,6 +390,28 @@ public partial class SettingsWindow : Window
             _integrationError = $"Error: {ex.Message}";
         }
         _integrationsCheckedUtc = DateTime.MinValue;
+        Render();
+    }
+
+    private void OnCopyTunnel(object sender, RoutedEventArgs e) =>
+        Copy(CopyTunnelButton, RemoteSetup.TunnelLine(_engine.Settings.RemotePort));
+
+    private void OnCopyInstall(object sender, RoutedEventArgs e) =>
+        Copy(CopyInstallButton, RemoteSetup.InstallCommand(_engine.Settings.RemotePort, _engine.Settings.RemoteToken));
+
+    private void Copy(Button button, string text)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (Exception ex) // another app holds the clipboard
+        {
+            Log.Warn($"No se pudo copiar al portapapeles: {ex.Message}");
+            return;
+        }
+        _copied = button;
+        _copiedUntilUtc = DateTime.UtcNow.AddSeconds(2);
         Render();
     }
 

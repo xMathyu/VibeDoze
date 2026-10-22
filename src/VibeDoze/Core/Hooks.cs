@@ -19,6 +19,8 @@ public sealed class HookMessage
     public long AgentCreation { get; set; }
     /// <summary>When the hook process started (FILETIME). Async hooks can arrive out of order; this sorts them.</summary>
     public long ClientTicks { get; set; }
+    /// <summary>Server the event came from over SSH (see RemoteHookServer); null for agents on this laptop.</summary>
+    public string? RemoteHost { get; set; }
 
     /// <summary>
     /// Wire format (one line): "v2\tagent\tevent\tsession\tcwd\tnotificationType".

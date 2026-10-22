@@ -145,6 +145,26 @@ internal static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
+    /// <summary>Last keyboard or mouse input in this session (MinValue if unknown).</summary>
+    public static DateTime LastInputUtc()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref info)) return DateTime.MinValue;
+        uint idleMs = unchecked((uint)Environment.TickCount - info.dwTime); // both wrap every 49.7 days
+        return DateTime.UtcNow - TimeSpan.FromMilliseconds(idleMs);
+    }
+
     // ───────────── Privileges ─────────────
 
     [StructLayout(LayoutKind.Sequential)]

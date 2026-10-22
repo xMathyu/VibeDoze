@@ -28,6 +28,20 @@ internal static class Snapshot
                 Path.Combine(dir, $"settings-{section[3..].ToLowerInvariant()}-{theme}.png"));
         }
 
+        // The SSH steps only show with the option on: Agentes once more with it on, in memory only (never saved).
+        bool remote = engine.Settings.RemoteEnabled;
+        try
+        {
+            engine.Settings.RemoteEnabled = true;
+            settings.ShowSection("SecAgents");
+            settings.RenderNow();
+            Save((FrameworkElement)settings.Content, 920, 1000, settings.Background, Path.Combine(dir, $"settings-agents-ssh-{theme}.png"));
+        }
+        finally
+        {
+            engine.Settings.RemoteEnabled = remote;
+        }
+
         var now = DateTime.UtcNow;
         var pending = new PendingAction
         {

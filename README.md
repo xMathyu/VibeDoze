@@ -2,7 +2,7 @@
 
 App de bandeja para Windows que **mantiene tu laptop despierta mientras Claude Code o Codex están trabajando**, aunque cierres la tapa, y la duerme sola cuando terminan. Incluye un límite de tiempo y protección térmica y de batería, para que no se recaliente dentro de una funda.
 
-Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains y con cualquier terminal (CLI de `claude` o `codex`).
+Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains y con cualquier terminal (CLI de `claude` o `codex`), y también con agentes instalados en un servidor al que entras por SSH, como una instancia EC2.
 
 <p align="center">
   <img src="docs/panel-light.png" width="300" alt="Panel de VibeDoze en modo claro">
@@ -21,6 +21,7 @@ Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains 
 | **Límite de tiempo** | 15 min, 30 min, 1 h, 2 h, 4 h, 8 h o un valor personalizado. Al llegar: suspender, hibernar o apagar. Si estás frente a la pantalla, aparece una cuenta regresiva de 60 s con *Posponer 15 min* y *Cancelar*. |
 | **Protección térmica** | Lee los sensores térmicos ACPI de Windows (sin admin). Apenas la temperatura llega al límite o lo supera (80 °C por defecto), suspende o hiberna, sin esperar. Si con la tapa cerrada la suspensión no entra en 75 s, hiberna. Con la tapa abierta avisa 30 s antes; si eliges *Ignorar*, la protección queda en pausa 15 min o hasta que cierres la tapa, lo que ocurra primero. Mientras hay agentes trabajando o la tapa está cerrada, el registro anota la temperatura cada minuto. Por defecto **solo actúa con batería**: enchufada es normal que se caliente (cargando, jugando con agentes corriendo). Se puede cambiar con "Solo con batería". |
 | **Batería baja** | Por debajo del porcentaje elegido deja de mantenerla despierta y, si la tapa está cerrada, la suspende. |
+| **Agentes por SSH** | Claude Code o Codex instalados en un servidor (una instancia EC2, por ejemplo) al que entras por SSH desde la laptop: sus hooks llegan por el mismo túnel SSH. Ver [Agentes en un servidor por SSH](#agentes-en-un-servidor-por-ssh). |
 | **Modo manual** | "Mantener despierta ahora", para cuando no hay agentes. |
 
 ## Descargar
@@ -109,6 +110,39 @@ Notas de los hooks:
 - **Codex**: se escriben en `~/.codex/hooks.json`. Codex exige **aprobar los hooks nuevos una vez**, con `/hooks` en la CLI o en la configuración de hooks de la extensión. Funcionan aunque uses el sandbox de Windows de Codex (`[windows] sandbox = "elevated"`). VibeDoze no toca tu `notify`.
 - Si un turno se interrumpe sin aviso, se da por terminado tras 10 min sin señales de vida (`HookStaleMinutes`).
 
+## Agentes en un servidor por SSH
+
+Si Claude Code o Codex corren en otra máquina (una instancia EC2, un servidor) y tú entras por SSH, en la laptop solo existe `ssh.exe`. VibeDoze no ve el proceso del agente, y los hooks se ejecutan en el servidor. Para eso está *Ajustes → Agentes → Agentes en un servidor (SSH)*:
+
+1. Activa **Recibir sus hooks por SSH**. VibeDoze escucha en `127.0.0.1:47811`, solo en la laptop.
+2. En tu `~/.ssh/config` (`C:\Users\<tú>\.ssh\config`), agrega bajo el `Host` del servidor la línea que muestra Ajustes, y vuelve a conectarte:
+
+   ```
+   Host mi-ec2
+       HostName ec2-xx-xx-xx-xx.compute.amazonaws.com
+       User ec2-user
+       RemoteForward 47811 127.0.0.1:47811
+   ```
+
+   Sin `~/.ssh/config` sirve `ssh -R 47811:127.0.0.1:47811 ec2-user@servidor`. VS Code Remote-SSH usa el mismo archivo, así que también funciona con la extensión.
+3. Con esa conexión abierta, pega en el servidor el comando que copia el botón **Copiar** (lleva un token):
+
+   ```sh
+   curl -fsS "http://127.0.0.1:47811/setup?token=…" | sh
+   ```
+
+   Crea `~/.vibedoze` (la configuración y `hook.sh`) y agrega los hooks a `~/.claude/settings.json`, y a `~/.codex/hooks.json` si existe, sin tocar el resto. Usa `python3`, que viene en las imágenes de EC2. Aplica a las sesiones **nuevas** de `claude`.
+
+En el panel, cada sesión aparece con el nombre del servidor y *SSH*. El nombre es el `hostname` del servidor; para otro, instala con `… | VIBEDOZE_NAME=mi-ec2 sh`. Para quitarlo: `… | sh -s -- remove`.
+
+Cómo se comporta:
+
+- Cada hook es un `curl` de unos 30 ms, en segundo plano. Sin túnel (SSH cerrado) falla al instante y el agente sigue igual.
+- Por SSH no hay CPU que medir. Tampoco llega ningún hook entre que respondes un permiso y el final de esa herramienta. Por eso, si usas el teclado o el mouse de la laptop después de que el agente pidió permiso, VibeDoze lo da por respondido y lo cuenta como trabajando.
+- Si el SSH se corta, los avisos dejan de llegar y el turno se da por terminado a los 10 min (`HookStaleMinutes`). Si `claude` corre directo en la sesión SSH, muere con ella; con **tmux** o `screen` en el servidor, el agente sigue aunque la laptop duerma.
+- Si abres varias conexiones al mismo servidor, la primera abre el túnel. Las demás avisan `remote port forwarding failed`, sin consecuencias, y sus sesiones usan ese mismo túnel mientras la primera siga abierta.
+- Para probar el túnel desde el servidor: `curl http://127.0.0.1:47811/ping`.
+
 ## Tapa cerrada y Modern Standby
 
 Para seguir trabajando con la tapa cerrada, VibeDoze cambia temporalmente la acción *"Al cerrar la tapa"* a *"No hacer nada"* en **todos** tus planes de energía. Así se cubre también el caso en que la app del fabricante cambia de plan (Silent, Turbo…). Lo deshace cuando los agentes terminan.
@@ -147,6 +181,8 @@ Ajustes avanzados, solo editables en `settings.json` (*Ajustes → General → A
 | `HookHardCapMinutes` | `30` | Turno sin ningún hook → terminado, aunque haya CPU |
 | `UpdateRepository` | `xMathyu/VibeDoze` | De qué repo de GitHub vienen las actualizaciones |
 | `WatchOthers` / `OtherAgents` | `false` | Vigila otros agentes por nombre de exe (`opencode`, `aider`) o fragmento de comando (`@google/gemini-cli`) |
+| `RemotePort` | `47811` | Puerto de los hooks por SSH: el mismo número en los dos lados del `RemoteForward` |
+| `RemoteToken` | (se genera) | Lo envía cada hook del servidor; si lo borras se genera otro y hay que reinstalar en el servidor |
 
 ## Línea de comandos
 

@@ -33,6 +33,14 @@
         <Setter Property="Foreground" Value="{DynamicResource VD.Sub}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
+    <!-- A line to copy (a command, a config line). -->
+    <Style x:Key="VD.Code" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource VD.Text}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,5,0,0" />
+    </Style>
     <Style x:Key="VD.RowTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="Medium" />
