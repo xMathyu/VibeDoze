@@ -88,6 +88,8 @@ internal sealed class Engine : IDisposable
     private DateTime _actionExecutedUtc = DateTime.MinValue;
     private DateTime? _displayOnSinceUtc = DateTime.UtcNow;
     private PendingAction? _shownPending;
+    /// <summary>The hold comes from a sleep VibeDoze didn't ask for: a screen on again is enough, even with the lid closed.</summary>
+    private bool _heldByWindowsSleep;
     /// <summary>Windows is shutting down / logging off: settings are restored and must not be re-applied.</summary>
     private DateTime _sessionEndingUntilUtc = DateTime.MinValue;
     private DateTime? _slashPreviewStartUtc;
@@ -412,7 +414,7 @@ internal sealed class Engine : IDisposable
             if (preview != SlashPattern.Off) return preview;
             _slashPreviewStartUtc = null;
         }
-        if (!Settings.SlashWhileLidClosed || !LidClosed || !_power.LidOverrideActive) return SlashPattern.Off;
+        if (!Settings.SlashWhileLidClosed || !LidClosed || !_power.LidOverrideActive || HoldReason is not null) return SlashPattern.Off;
         var busy = _tracker.Processes.Where(a => a.Busy && IsWatched(a.Kind)).ToList();
         if (busy.Any(a => a.Working)) return SlashPattern.Working;
         return busy.Any(a => a.Waiting) ? SlashPattern.Waiting : SlashPattern.Resting; // finished (grace) or manual mode
@@ -433,9 +435,12 @@ internal sealed class Engine : IDisposable
     /// </param>
     private void Evaluate(DateTime now, bool powerPlans = true)
     {
-        // 0) Someone is in front of the screen again (lid open, display on for 10 s, a while after our action).
-        if (HoldReason is not null && Interactive && !LidClosed
+        // 0) Someone is in front of the screen again (lid open, display on for 10 s, awake for 10 s, a while after
+        //    our action). After a sleep VibeDoze didn't ask for, a screen on with the lid closed counts too: an
+        //    external monitor.
+        if (HoldReason is not null && Interactive && (!LidClosed || _heldByWindowsSleep)
             && _displayOnSinceUtc is { } displayOn && now - displayOn > TimeSpan.FromSeconds(10)
+            && now - _wokeUtc > TimeSpan.FromSeconds(10)
             && now - _actionExecutedUtc > TimeSpan.FromSeconds(10))
         {
             Log.Info("El usuario volvió (pantalla encendida): se reanuda VibeDoze");
@@ -675,6 +680,7 @@ internal sealed class Engine : IDisposable
             ActionSource.Finished => $"{ActionName(p.Action)} al terminar (tapa cerrada)",
             _ => $"{ActionName(p.Action)} manual",
         };
+        _heldByWindowsSleep = false;
 
         _power.SetKeepAwake(false, false, string.Empty);
         if (_power.LidOverrideActive) _power.RestoreLid();
@@ -731,7 +737,9 @@ internal sealed class Engine : IDisposable
         {
             Mode = EngineMode.Held;
             Headline = "En espera";
-            Detail = $"{HoldReason}. Vuelvo a activarme cuando abras la tapa.";
+            Detail = _heldByWindowsSleep
+                ? $"{HoldReason}. Vuelvo a activarme cuando vuelvas a usar la laptop."
+                : $"{HoldReason}. Vuelvo a activarme cuando abras la tapa.";
         }
         else if (_batteryHold)
         {
@@ -864,6 +872,7 @@ internal sealed class Engine : IDisposable
                     _sleepAttemptUtc = null;
                     Log.Info("Sistema entrando en suspensión");
                     _slash.Release(TimeSpan.FromMilliseconds(500), keepDark: true);
+                    OnSuspend();
                     break;
                 case Native.PBT_APMRESUMEAUTOMATIC:
                     OnResume(byUser: false);
@@ -933,6 +942,26 @@ internal sealed class Engine : IDisposable
         Log.Info($"Protección térmica reactivada: {why}");
     }
 
+    /// <summary>
+    /// Windows goes to sleep without VibeDoze asking (power button, Start › Sleep, the lid): that wins. Until the
+    /// user is back nothing keeps the laptop awake, not even an agent that runs for a moment while it is suspending
+    /// or on a wake for maintenance, and the Slash stays dark. Otherwise the very next tick lit the bar again and it
+    /// stayed on, frozen, the whole sleep.
+    /// </summary>
+    private void OnSuspend()
+    {
+        _slashPreviewStartUtc = null;
+        if (!Settings.Enabled || HoldReason is not null) return; // paused, or a sleep of ours
+        var now = DateTime.UtcNow;
+        HoldReason = "Suspendida desde Windows";
+        _heldByWindowsSleep = true;
+        _actionExecutedUtc = now; // only a screen turned on after this means the user is back
+        Log.Info("Suspensión fuera de VibeDoze: no la mantengo despierta hasta que vuelvas");
+        Evaluate(now); // the power request, the lid and "sleep after" back to normal before it sleeps
+        UpdateSlash(now);
+        Updated?.Invoke();
+    }
+
     private void OnResume(bool byUser)
     {
         Log.Info(byUser ? "Reanudado por el usuario" : "Reanudado");
@@ -948,7 +977,8 @@ internal sealed class Engine : IDisposable
             ClearTimerCore();
             Pending = null;
         }
-        if (byUser && !LidClosed) HoldReason = null;
+        // Modern Standby says "by the user" on wakes nobody asked for too: after a sleep of Windows', wait for the screen.
+        if (byUser && !LidClosed && !_heldByWindowsSleep) HoldReason = null;
         Refresh();
     }
 
