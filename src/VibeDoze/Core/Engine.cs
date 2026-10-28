@@ -51,7 +51,7 @@ internal sealed class Engine : IDisposable
     private static readonly TimeSpan ThermalRetry = TimeSpan.FromMinutes(2);
     /// <summary>Right after waking up the lid / screen / charger state may still be the old one: wait for the messages.</summary>
     private static readonly TimeSpan ResumeSettle = TimeSpan.FromSeconds(5);
-    /// <summary>A gap this long between ticks means the app was frozen (suspended).</summary>
+    /// <summary>A gap this long between ticks means the app was frozen (suspended), if the heartbeat stopped too.</summary>
     private static readonly TimeSpan TickGap = TimeSpan.FromSeconds(10);
 
     private readonly PowerController _power = new();
@@ -67,6 +67,13 @@ internal sealed class Engine : IDisposable
     private readonly DispatcherTimer _timer;
     /// <summary>Applies the power plans a moment after a UI command, once the panel has painted (and animated).</summary>
     private readonly DispatcherTimer _settle;
+    /// <summary>
+    /// Beats every second on a pool thread. A late tick while it kept beating was the UI thread busy, not the
+    /// app frozen: that must not count as waking up (it would cancel a thermal countdown).
+    /// </summary>
+    private readonly System.Threading.Timer _heartbeat;
+    private long _heartbeatTicks;
+    private long _heartbeatResumedTicks;
     private readonly HwndSource _window;
     private readonly List<IntPtr> _powerNotifications = new();
     private readonly IntPtr _suspendNotification;
@@ -146,6 +153,7 @@ internal sealed class Engine : IDisposable
             UpdateSlash(now);
             Updated?.Invoke();
         };
+        _heartbeat = new System.Threading.Timer(_ => Heartbeat());
         Log.Info($"VibeDoze iniciado (Modern Standby: {PowerController.Capabilities.ModernStandby}, " +
                  $"hibernación: {PowerController.Capabilities.CanHibernate}, sensor: {_thermal.SensorName ?? "ninguno"})");
         LogThermalConfig();
@@ -155,6 +163,7 @@ internal sealed class Engine : IDisposable
     public void Start()
     {
         _timer.Start();
+        _heartbeat.Change(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         Tick();
     }
 
@@ -338,7 +347,7 @@ internal sealed class Engine : IDisposable
         try
         {
             // After a freeze (suspended) this tick can run before the resume, lid and charger messages arrive.
-            if (now - _lastTickUtc > TickGap) _wokeUtc = now;
+            if (now - _lastTickUtc > TickGap && FrozenSince(_lastTickUtc, now)) _wokeUtc = now;
             _lastTickUtc = now;
 
             while (_inbox.TryDequeue(out var message))
@@ -359,6 +368,23 @@ internal sealed class Engine : IDisposable
         }
         Updated?.Invoke();
     }
+
+    /// <summary>Runs on a pool thread. Records the gap first, so a tick that already sees the new beat sees it too.</summary>
+    private void Heartbeat()
+    {
+        long now = DateTime.UtcNow.Ticks;
+        long last = Interlocked.Read(ref _heartbeatTicks);
+        if (last != 0 && now - last > TickGap.Ticks) Interlocked.Exchange(ref _heartbeatResumedTicks, now);
+        Interlocked.Exchange(ref _heartbeatTicks, now);
+    }
+
+    /// <summary>
+    /// The whole app stood still since <paramref name="lastTick"/> (suspended), not just the UI thread: the
+    /// heartbeat hasn't come back yet either, or it already came back from a gap of its own.
+    /// </summary>
+    private bool FrozenSince(DateTime lastTick, DateTime now) =>
+        now.Ticks - Interlocked.Read(ref _heartbeatTicks) > TickGap.Ticks
+        || Interlocked.Read(ref _heartbeatResumedTicks) > lastTick.Ticks;
 
     private void OnHook(HookMessage m, DateTime now)
     {
@@ -988,6 +1014,7 @@ internal sealed class Engine : IDisposable
         _disposed = true;
         _timer.Stop();
         _settle.Stop();
+        _heartbeat.Dispose();
         _hookServer.Dispose();
         _remote.Dispose();
         foreach (var h in _powerNotifications) Native.UnregisterPowerSettingNotification(h);
