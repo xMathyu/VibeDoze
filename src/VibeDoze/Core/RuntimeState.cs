@@ -4,7 +4,7 @@ namespace VibeDoze.Core;
 
 /// <summary>
 /// State that must survive a crash: the original power settings we overrode (so they can always be
-/// restored) and the active shutdown timer.
+/// restored) and the end of Mantener activa.
 /// </summary>
 public sealed class RuntimeState
 {
@@ -15,7 +15,8 @@ public sealed class RuntimeState
     public SlashOriginal? Slash { get; set; }
     /// <summary>The Slash is switched off while the laptop is in use (its master switch).</summary>
     public bool SlashDark { get; set; }
-    public DateTime? TimerDeadlineUtc { get; set; }
+    /// <summary>Mantener activa with a time limit: when it ends.</summary>
+    public DateTime? KeepActiveUntilUtc { get; set; }
 }
 
 public sealed class LidOriginal

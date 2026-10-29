@@ -44,8 +44,8 @@ public sealed class AppSettings
     /// <summary>Minutes to keep the laptop awake after the agent finished (time to read the result).</summary>
     public int FinishGraceMinutes { get; set; } = 2;
 
-    // ── Timer ──
-    public SystemAction TimerAction { get; set; } = SystemAction.Sleep;
+    // ── Mantener activa ──
+    /// <summary>Last custom duration typed for Mantener activa.</summary>
     public int CustomTimerMinutes { get; set; } = 90;
 
     // ── Protection ──

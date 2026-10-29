@@ -8,7 +8,7 @@ namespace VibeDoze.UI;
 /// <summary>Notification-area icon: left click opens the panel, right click shows quick toggles.</summary>
 internal sealed class TrayIcon : IDisposable
 {
-    private static readonly (int Minutes, string Label)[] TimerPresets =
+    private static readonly (int Minutes, string Label)[] KeepActivePresets =
     {
         (15, "15 minutos"), (30, "30 minutos"), (60, "1 hora"), (120, "2 horas"), (240, "4 horas"), (480, "8 horas"),
     };
@@ -90,7 +90,7 @@ internal sealed class TrayIcon : IDisposable
         }
 
         var tip = "VibeDoze — " + _engine.Headline;
-        if (_engine.TimerDeadlineUtc is { } deadline) tip += $"\nLímite: {Format.Remaining(deadline - DateTime.UtcNow)}";
+        if (_engine.KeepActiveUntilUtc is { } until) tip += $"\nMantener activa: {Format.Remaining(until - DateTime.UtcNow)}";
         if (_engine.Thermal.TemperatureC is { } t) tip += $"\nTemperatura: {ThermalMonitor.Format(t)}";
         if (tip.Length > 127) tip = tip[..127];
         if (tip != _tooltip)
@@ -150,35 +150,31 @@ internal sealed class TrayIcon : IDisposable
         items.Add(Check("Claude Code", s.WatchClaude, v => s.WatchClaude = v));
         items.Add(Check("Codex", s.WatchCodex, v => s.WatchCodex = v));
         items.Add(Check("Seguir con la tapa cerrada", s.KeepRunningWithLidClosed, v => s.KeepRunningWithLidClosed = v));
-        items.Add(Check("Mantener despierta ahora", _engine.ManualAwake, _engine.SetManualAwake, save: false));
         items.Add(new WinForms.ToolStripSeparator());
 
-        var timer = new WinForms.ToolStripMenuItem("Límite de tiempo")
+        var active = new WinForms.ToolStripMenuItem("Mantener activa")
         {
-            ShortcutKeyDisplayString = _engine.TimerDeadlineUtc is { } deadline ? Format.Remaining(deadline - DateTime.UtcNow) : null,
+            Checked = _engine.KeepActive,
+            ShortcutKeyDisplayString = _engine.KeepActiveUntilUtc is { } until ? Format.Remaining(until - DateTime.UtcNow)
+                : _engine.KeepActive ? "sin límite" : null,
         };
-        foreach (var (minutes, label) in TimerPresets)
-            timer.DropDownItems.Add(Item(label, () => _engine.SetTimer(minutes)));
-        if (_engine.TimerDeadlineUtc is not null)
+        active.DropDownItems.Add(Item("Sin límite (hasta que Claude termine)", () => _engine.StartKeepActive(null)));
+        foreach (var (minutes, label) in KeepActivePresets)
+            active.DropDownItems.Add(Item(label, () => _engine.StartKeepActive(minutes)));
+        if (_engine.KeepActive)
         {
-            timer.DropDownItems.Add(new WinForms.ToolStripSeparator());
-            timer.DropDownItems.Add(Item("Quitar límite", _engine.ClearTimer));
+            active.DropDownItems.Add(new WinForms.ToolStripSeparator());
+            active.DropDownItems.Add(Item("Desactivar", _engine.StopKeepActive));
         }
-        timer.DropDownItems.Add(new WinForms.ToolStripSeparator());
-        foreach (var action in Enum.GetValues<SystemAction>())
-        {
-            var a = action;
-            timer.DropDownItems.Add(Check($"Al llegar: {Engine.ActionName(a)}", s.TimerAction == a, _ => s.TimerAction = a));
-        }
-        timer.DropDown.Renderer = renderer;
-        timer.DropDown.BackColor = renderer.Background;
-        timer.DropDown.Padding = new WinForms.Padding(0, 5, 0, 5);
-        timer.DropDown.Opened += (_, _) =>
+        active.DropDown.Renderer = renderer;
+        active.DropDown.BackColor = renderer.Background;
+        active.DropDown.Padding = new WinForms.Padding(0, 5, 0, 5);
+        active.DropDown.Opened += (_, _) =>
         {
             int round = Native.DWMWCP_ROUND;
-            Native.DwmSetWindowAttribute(timer.DropDown.Handle, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
+            Native.DwmSetWindowAttribute(active.DropDown.Handle, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
         };
-        items.Add(timer);
+        items.Add(active);
 
         var thermal = Check("Protección térmica", s.ThermalGuard, v => s.ThermalGuard = v);
         thermal.ShortcutKeyDisplayString = s.ThermalGuard && s.ThermalOnlyOnBattery && !_engine.OnBattery
@@ -192,7 +188,7 @@ internal sealed class TrayIcon : IDisposable
         items.Add(Item("Salir de VibeDoze", _app.Quit));
 
         foreach (WinForms.ToolStripItem item in items) Style(item, renderer);
-        foreach (WinForms.ToolStripItem item in timer.DropDownItems) Style(item, renderer);
+        foreach (WinForms.ToolStripItem item in active.DropDownItems) Style(item, renderer);
     }
 
     private static void Style(WinForms.ToolStripItem item, MenuRenderer renderer)
@@ -209,13 +205,13 @@ internal sealed class TrayIcon : IDisposable
         return item;
     }
 
-    private WinForms.ToolStripMenuItem Check(string text, bool value, Action<bool> set, bool save = true)
+    private WinForms.ToolStripMenuItem Check(string text, bool value, Action<bool> set)
     {
         var item = new WinForms.ToolStripMenuItem(text) { Checked = value };
         item.Click += (_, _) =>
         {
             set(!value);
-            if (save) _engine.SaveSettings();
+            _engine.SaveSettings();
         };
         return item;
     }

@@ -33,8 +33,7 @@
                 <TextBlock x:Name="Reason" Style="{StaticResource VD.Caption}" FontSize="13" HorizontalAlignment="Center" TextAlignment="Center"
                            Margin="0,6,0,20" />
                 <UniformGrid Rows="1">
-                    <Button x:Name="PostponeButton" Content="Posponer 15 min" Style="{StaticResource VD.CapsuleFill}" Height="38" Margin="0,0,4,0" Click="OnPostpone" />
-                    <Button x:Name="CancelButton" Content="Cancelar" Style="{StaticResource VD.CapsuleFill}" Height="38" Margin="4,0" Click="OnCancel" />
+                    <Button x:Name="CancelButton" Content="Cancelar" Style="{StaticResource VD.CapsuleFill}" Height="38" Margin="0,0,4,0" Click="OnCancel" />
                     <Button x:Name="NowButton" Style="{StaticResource VD.CapsuleAccent}" Height="38" Margin="4,0,0,0" Click="OnNow" />
                 </UniformGrid>
             </StackPanel>

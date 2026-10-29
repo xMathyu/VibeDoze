@@ -104,7 +104,6 @@ public partial class SettingsWindow : Window
             AutoUpdateSwitch.IsChecked = s.AutoUpdate;
 
             Select(LidDoneAction, s.LidClosedDoneAction);
-            Select(TimerAction, s.TimerAction);
             Select(ThermalAction, s.ThermalAction);
             Select(GraceCombo, s.FinishGraceMinutes, m => $"{m} min");
             Select(BatteryCombo, s.BatteryMinPercent, pct => $"{pct} %");
@@ -181,19 +180,22 @@ public partial class SettingsWindow : Window
 
     private void RenderTimer()
     {
-        var s = _engine.Settings;
-        if (_engine.TimerDeadlineUtc is { } deadline)
+        if (_engine.KeepActiveUntilUtc is { } until)
         {
-            TimerTitle.Text = $"Quedan {Format.Remaining(deadline - DateTime.UtcNow)}";
-            TimerSub.Text = $"{Engine.ActionName(s.TimerAction)} a las {deadline.ToLocalTime():HH:mm}";
-            ClearTimerButton.Visibility = Visibility.Visible;
+            TimerTitle.Text = $"Activa · quedan {Format.Remaining(until - DateTime.UtcNow)}";
+            TimerSub.Text = $"Hasta las {until.ToLocalTime():HH:mm}, aunque Claude termine antes";
+        }
+        else if (_engine.KeepActive)
+        {
+            TimerTitle.Text = "Activa · sin límite";
+            TimerSub.Text = "Hasta que Claude termine o la desactives";
         }
         else
         {
-            TimerTitle.Text = "Sin límite";
-            TimerSub.Text = "Elige cuánto tiempo más puede seguir encendida.";
-            ClearTimerButton.Visibility = Visibility.Collapsed;
+            TimerTitle.Text = "Desactivada";
+            TimerSub.Text = "Elige por cuánto tiempo, o sin límite hasta que Claude termine.";
         }
+        ClearTimerButton.Visibility = _engine.KeepActive ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RenderThermal()
@@ -300,7 +302,6 @@ public partial class SettingsWindow : Window
         s.BatteryGuard = BatterySwitch.IsChecked == true;
         s.AutoUpdate = AutoUpdateSwitch.IsChecked == true;
         s.LidClosedDoneAction = Selected(LidDoneAction, s.LidClosedDoneAction);
-        s.TimerAction = Selected(TimerAction, s.TimerAction);
         s.ThermalAction = Selected(ThermalAction, s.ThermalAction);
         s.FinishGraceMinutes = Selected(GraceCombo, s.FinishGraceMinutes);
         s.BatteryMinPercent = Selected(BatteryCombo, s.BatteryMinPercent);
@@ -326,7 +327,8 @@ public partial class SettingsWindow : Window
 
     private void OnTimerPreset(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string tag } && int.TryParse(tag, out int minutes)) _engine.SetTimer(minutes);
+        if (sender is Button { Tag: string tag } && int.TryParse(tag, out int minutes))
+            _engine.StartKeepActive(minutes == 0 ? null : minutes);
     }
 
     private void OnCustomTimer(object sender, RoutedEventArgs e) => StartCustomTimer();
@@ -346,10 +348,10 @@ public partial class SettingsWindow : Window
         _engine.Settings.CustomTimerMinutes = minutes;
         SettingsStore.Save(_engine.Settings);
         Keyboard.ClearFocus();
-        _engine.SetTimer(minutes);
+        _engine.StartKeepActive(minutes);
     }
 
-    private void OnClearTimer(object sender, RoutedEventArgs e) => _engine.ClearTimer();
+    private void OnClearTimer(object sender, RoutedEventArgs e) => _engine.StopKeepActive();
 
     private void OnClaudeHookClick(object sender, RoutedEventArgs e)
     {
@@ -446,7 +448,7 @@ public partial class SettingsWindow : Window
 
     private void FillCombos()
     {
-        foreach (var combo in new[] { LidDoneAction, TimerAction, ThermalAction })
+        foreach (var combo in new[] { LidDoneAction, ThermalAction })
             foreach (var action in Enum.GetValues<SystemAction>())
                 combo.Items.Add(new ComboBoxItem { Content = Engine.ActionName(action), Tag = action });
 

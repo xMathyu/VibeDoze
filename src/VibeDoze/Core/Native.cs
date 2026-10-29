@@ -165,6 +165,57 @@ internal static class Native
         return DateTime.UtcNow - TimeSpan.FromMilliseconds(idleMs);
     }
 
+    // ───────────── Synthetic input ─────────────
+
+    public const ushort VK_F15 = 0x7E;
+    private const uint INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_KEYUP = 0x2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int Dx, Dy;
+        public uint MouseData, Flags, Time;
+        public IntPtr ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort Vk, Scan;
+        public uint Flags, Time;
+        public IntPtr ExtraInfo;
+    }
+
+    /// <summary>The union is as large as its biggest member (MOUSEINPUT): SendInput rejects any other size.</summary>
+    [StructLayout(LayoutKind.Explicit)]
+    private struct INPUTUNION
+    {
+        [FieldOffset(0)] public MOUSEINPUT Mouse;
+        [FieldOffset(0)] public KEYBDINPUT Keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint Type;
+        public INPUTUNION U;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint count, INPUT[] inputs, int size);
+
+    /// <summary>Presses and releases a key, as if typed. False when Windows didn't take it (locked session).</summary>
+    public static bool PressKey(ushort vk)
+    {
+        var inputs = new[]
+        {
+            new INPUT { Type = INPUT_KEYBOARD, U = new INPUTUNION { Keyboard = new KEYBDINPUT { Vk = vk } } },
+            new INPUT { Type = INPUT_KEYBOARD, U = new INPUTUNION { Keyboard = new KEYBDINPUT { Vk = vk, Flags = KEYEVENTF_KEYUP } } },
+        };
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) == inputs.Length;
+    }
+
     // ───────────── Privileges ─────────────
 
     [StructLayout(LayoutKind.Sequential)]

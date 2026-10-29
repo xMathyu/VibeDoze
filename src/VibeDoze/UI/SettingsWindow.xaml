@@ -56,7 +56,7 @@
                             <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource VD.Orange}">
                                 <ui:GlyphIcon Data="{StaticResource G.Timer}" Width="14" Height="14" Foreground="White" Thickness="2.2" />
                             </Border>
-                            <TextBlock Text="Límite de tiempo" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Mantener activa" Margin="10,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavProtection" Style="{StaticResource VD.NavItem}" GroupName="vdNav" Tag="SecProtection" Checked="OnNav">
@@ -364,22 +364,22 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Timer -->
+                <!-- Mantener activa -->
                 <StackPanel x:Name="SecTimer" Visibility="Collapsed">
                     <DockPanel Margin="0,0,0,20">
                         <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="11" Background="{DynamicResource VD.Orange}" Margin="0,0,14,0">
                             <ui:GlyphIcon Data="{StaticResource G.Timer}" Width="24" Height="24" Foreground="White" Thickness="1.9" />
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Límite de tiempo" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
-                            <TextBlock Text="Cuánto tiempo más puede seguir encendida la laptop." Style="{StaticResource VD.Caption}" FontSize="13" />
+                            <TextBlock Text="Mantener activa" FontFamily="{StaticResource VD.DisplayFont}" FontSize="24" FontWeight="Bold" />
+                            <TextBlock Text="Pantalla encendida y Teams, Slack… en Disponible, como Caffeine." Style="{StaticResource VD.Caption}" FontSize="13" />
                         </StackPanel>
                     </DockPanel>
                     <Border Style="{StaticResource VD.GroupCard}">
                         <StackPanel>
                             <Border Style="{StaticResource VD.Row}">
                                 <DockPanel>
-                                    <Button x:Name="ClearTimerButton" DockPanel.Dock="Right" Content="Quitar límite" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" Click="OnClearTimer" />
+                                    <Button x:Name="ClearTimerButton" DockPanel.Dock="Right" Content="Desactivar" Style="{StaticResource VD.CapsuleFill}" Margin="12,0,0,0" Click="OnClearTimer" />
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock x:Name="TimerTitle" Style="{StaticResource VD.RowTitle}" />
                                         <TextBlock x:Name="TimerSub" Style="{StaticResource VD.Caption}" />
@@ -388,6 +388,7 @@
                             </Border>
                             <Border Style="{StaticResource VD.RowNext}" Padding="0,12,0,6">
                                 <WrapPanel>
+                                    <Button Style="{StaticResource VD.CapsuleFill}" Content="Sin límite" Tag="0" Margin="0,0,8,8" Click="OnTimerPreset" />
                                     <Button Style="{StaticResource VD.CapsuleFill}" Content="15 min" Tag="15" Margin="0,0,8,8" Click="OnTimerPreset" />
                                     <Button Style="{StaticResource VD.CapsuleFill}" Content="30 min" Tag="30" Margin="0,0,8,8" Click="OnTimerPreset" />
                                     <Button Style="{StaticResource VD.CapsuleFill}" Content="1 h" Tag="60" Margin="0,0,8,8" Click="OnTimerPreset" />
@@ -405,17 +406,10 @@
                                     <TextBlock Text="Personalizado" Style="{StaticResource VD.RowTitle}" VerticalAlignment="Center" />
                                 </DockPanel>
                             </Border>
-                            <Border Style="{StaticResource VD.RowNext}">
-                                <DockPanel>
-                                    <ComboBox x:Name="TimerAction" DockPanel.Dock="Right" Width="170" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="OnComboChanged" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Al llegar al límite" Style="{StaticResource VD.RowTitle}" />
-                                        <TextBlock Text="Si estás frente a la pantalla, te avisa 60 s antes para posponer o cancelar." Style="{StaticResource VD.Caption}" />
-                                    </StackPanel>
-                                </DockPanel>
-                            </Border>
                         </StackPanel>
                     </Border>
+                    <TextBlock Style="{StaticResource VD.Caption}" Margin="4,8,0,0"
+                               Text="Tras un minuto sin teclado ni mouse pulsa F15, una tecla que ninguna app usa. Sigue con la tapa cerrada: no se suspende, Teams te ve Disponible y un monitor externo queda encendido. Con un tiempo elegido dura eso aunque Claude termine antes; sin límite, se desactiva cuando Claude termina. Al desactivarse, la laptop vuelve a suspenderse como siempre. Si se suspende antes, también se desactiva." />
                 </StackPanel>
 
                 <!-- Protection -->

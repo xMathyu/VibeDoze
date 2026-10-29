@@ -208,12 +208,14 @@ public partial class MainWindow : Window
         ClaudeTile.IsChecked = s.WatchClaude;
         CodexTile.IsChecked = s.WatchCodex;
         LidTile.IsChecked = s.KeepRunningWithLidClosed;
-        ManualTile.IsChecked = _engine.ManualAwake;
+        ActiveTile.IsChecked = _engine.KeepActive;
 
         ClaudeTileSub.Text = TileSummary(AgentKind.Claude, agents, s.WatchClaude);
         CodexTileSub.Text = TileSummary(AgentKind.Codex, agents, s.WatchCodex);
         LidTileSub.Text = s.KeepRunningWithLidClosed ? "Sigue trabajando" : "Suspende normal";
-        ManualTileSub.Text = _engine.ManualAwake ? "Activado" : "Manual";
+        ActiveTileSub.Text = !_engine.KeepActive ? "Pantalla y Teams"
+            : _engine.KeepActiveUntilUtc is { } until ? $"Hasta las {until.ToLocalTime():HH:mm}"
+            : "Sin límite";
     }
 
     private static string TileSummary(AgentKind kind, IReadOnlyList<AgentProcess> agents, bool watched)
@@ -303,20 +305,25 @@ public partial class MainWindow : Window
 
     private void RenderTimer()
     {
-        var s = _engine.Settings;
-        int selected = _engine.TimerDeadlineUtc is null ? 0 : _engine.TimerMinutes ?? -1;
+        // While it's off no segment is selected: picking one starts it ("Sin": no time limit).
+        int selected = !_engine.KeepActive ? -1 : _engine.KeepActiveUntilUtc is null ? 0 : _engine.KeepActiveMinutes ?? -1;
         foreach (var child in TimerSegments.Children.OfType<RadioButton>())
             child.IsChecked = child.Tag is string tag && int.TryParse(tag, out int m) && m == selected;
 
-        if (_engine.TimerDeadlineUtc is { } deadline)
+        if (_engine.KeepActiveUntilUtc is { } until)
         {
-            TimerRemaining.Text = $"Quedan {Format.Remaining(deadline - DateTime.UtcNow)}";
-            TimerStatus.Text = $"{Engine.ActionName(s.TimerAction)} a las {deadline.ToLocalTime():HH:mm}";
+            TimerRemaining.Text = $"Quedan {Format.Remaining(until - DateTime.UtcNow)}";
+            TimerStatus.Text = $"Hasta las {until.ToLocalTime():HH:mm}, aunque Claude termine antes";
+        }
+        else if (_engine.KeepActive)
+        {
+            TimerRemaining.Text = "Activa";
+            TimerStatus.Text = "Sin límite: hasta que Claude termine o la apagues";
         }
         else
         {
             TimerRemaining.Text = string.Empty;
-            TimerStatus.Text = $"Sin límite · al llegar: {Engine.ActionName(s.TimerAction).ToLowerInvariant()}";
+            TimerStatus.Text = "Pantalla y Teams activos con F15, como Caffeine";
         }
     }
 
@@ -363,16 +370,17 @@ public partial class MainWindow : Window
         _engine.SaveSettings();
     }
 
-    private void OnManualClick(object sender, RoutedEventArgs e)
+    private void OnActiveClick(object sender, RoutedEventArgs e)
     {
-        if (!_rendering) _engine.SetManualAwake(ManualTile.IsChecked == true);
+        if (_rendering) return;
+        if (ActiveTile.IsChecked == true) _engine.StartKeepActive(null);
+        else _engine.StopKeepActive();
     }
 
     private void OnTimerSegment(object sender, RoutedEventArgs e)
     {
         if (_rendering || sender is not RadioButton { Tag: string tag } || !int.TryParse(tag, out int minutes)) return;
-        if (minutes == 0) _engine.ClearTimer();
-        else _engine.SetTimer(minutes);
+        _engine.StartKeepActive(minutes == 0 ? null : minutes);
     }
 
     private void OnProtectionClick(object sender, RoutedEventArgs e)

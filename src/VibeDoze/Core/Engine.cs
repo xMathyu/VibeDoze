@@ -17,7 +17,6 @@ public enum EngineMode
 
 public enum ActionSource
 {
-    Timer,
     Thermal,
     Finished,
     Battery,
@@ -35,14 +34,13 @@ public sealed class PendingAction
 
 /// <summary>
 /// The brain. Every second it reads hook events, every 3 s it scans agent processes, every 5 s it reads
-/// the temperature, and then decides: keep the laptop awake? override the lid? run the timer / thermal /
-/// battery / "finished with the lid closed" action?
+/// the temperature, and then decides: keep the laptop awake? override the lid? keep the screen and Teams active?
+/// run the thermal / battery / "finished with the lid closed" action?
 /// </summary>
 internal sealed class Engine : IDisposable
 {
     private static readonly TimeSpan ThermalCountdown = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ThermalLogInterval = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan TimerCountdown = TimeSpan.FromSeconds(60);
     /// <summary>Lid closed, sleep requested, still running after this long → hibernate (idle standby takes ~1 min).</summary>
     private static readonly TimeSpan SleepEscalation = TimeSpan.FromSeconds(150);
     /// <summary>The same for a sleep caused by heat: it can't wait as long.</summary>
@@ -59,6 +57,7 @@ internal sealed class Engine : IDisposable
     private readonly AgentScanner _scanner = new();
     private readonly AgentTracker _tracker = new();
     private readonly ThermalMonitor _thermal = new();
+    private readonly ActivityKeeper _activity = new();
     private readonly HookServer _hookServer;
     private readonly RemoteHookServer _remote;
     private readonly ConcurrentQueue<HookMessage> _inbox = new();
@@ -87,7 +86,10 @@ internal sealed class Engine : IDisposable
     private DateTime _thermalLoggedUtc = DateTime.MinValue;
     private double? _thermalLogPeakC;
     private string? _thermalConfigLogged;
-    private bool _timerWarned;
+    /// <summary>An agent worked while Mantener activa was on without a time limit: it ends when they're done.</summary>
+    private bool _keepActiveSawWork;
+    /// <summary>The last time we kept the laptop awake it was only for Mantener activa (no agent busy).</summary>
+    private bool _awakeForKeepActive;
     private bool _batteryHold;
     private DateTime? _sleepAttemptUtc;
     private bool _suspendObserved;
@@ -95,6 +97,8 @@ internal sealed class Engine : IDisposable
     private DateTime _actionExecutedUtc = DateTime.MinValue;
     private DateTime? _displayOnSinceUtc = DateTime.UtcNow;
     private PendingAction? _shownPending;
+    /// <summary>The screen came on with the lid closed right after an F15 of ours (see <see cref="OnDisplay"/>).</summary>
+    private DateTime? _displayWokenByKeyUtc;
     /// <summary>The hold comes from a sleep VibeDoze didn't ask for: a screen on again is enough, even with the lid closed.</summary>
     private bool _heldByWindowsSleep;
     /// <summary>Windows is shutting down / logging off: settings are restored and must not be re-applied.</summary>
@@ -113,10 +117,16 @@ internal sealed class Engine : IDisposable
             PowerController.RestoreAllFromState();
         }
         _slash = new SlashLight(); // after the recovery: it picks up whether the bar was left off on purpose
-        if (state.TimerDeadlineUtc is { } deadline && deadline > DateTime.UtcNow.AddSeconds(30))
-            TimerDeadlineUtc = deadline;
-        else if (state.TimerDeadlineUtc is not null)
-            RuntimeStateStore.Update(s => s.TimerDeadlineUtc = null);
+        if (state.KeepActiveUntilUtc is { } until && until > DateTime.UtcNow.AddSeconds(30))
+        {
+            KeepActive = true;
+            KeepActiveUntilUtc = until;
+            Log.Info($"Mantener activa: sigue hasta las {until.ToLocalTime():HH:mm}");
+        }
+        else if (state.KeepActiveUntilUtc is not null)
+        {
+            RuntimeStateStore.Update(s => s.KeepActiveUntilUtc = null);
+        }
 
         // Hidden top-level window: receives lid / display / power-plan / suspend notifications.
         _window = new HwndSource(new HwndSourceParameters("VibeDoze.PowerEvents")
@@ -179,10 +189,12 @@ internal sealed class Engine : IDisposable
     public bool DisplayOn { get; private set; } = true;
     public bool OnBattery { get; private set; }
     public int? BatteryPercent { get; private set; }
-    public bool ManualAwake { get; private set; }
-    public DateTime? TimerDeadlineUtc { get; private set; }
-    /// <summary>Minutes of the active timer when it was set in this session (to highlight its preset).</summary>
-    public int? TimerMinutes { get; private set; }
+    /// <summary>Mantener activa: the screen on and F15 presses (Teams stays available), the lid as when agents work.</summary>
+    public bool KeepActive { get; private set; }
+    /// <summary>When Mantener activa ends; null: no time limit (it ends when the agents that work meanwhile finish).</summary>
+    public DateTime? KeepActiveUntilUtc { get; private set; }
+    /// <summary>Minutes chosen for Mantener activa in this session (to highlight its preset).</summary>
+    public int? KeepActiveMinutes { get; private set; }
     public string? HoldReason { get; private set; }
     public PendingAction? Pending { get; private set; }
     public EngineMode Mode { get; private set; }
@@ -204,7 +216,7 @@ internal sealed class Engine : IDisposable
     /// to the power settings, no countdown and not waiting for the user after an automatic sleep.
     /// </summary>
     public bool CanRestartSafely =>
-        !_power.KeepingAwake && !_power.LidOverrideActive && !PowerController.IdleOverrideActive
+        !KeepActive && !_power.KeepingAwake && !_power.LidOverrideActive && !PowerController.IdleOverrideActive
         && Pending is null && HoldReason is null && _sleepAttemptUtc is null
         && !_tracker.Processes.Any(a => a.Busy && IsWatched(a.Kind));
 
@@ -243,38 +255,37 @@ internal sealed class Engine : IDisposable
         _remote.Configure(Settings.RemoteEnabled ? Settings.RemotePort : 0, Settings.RemoteToken);
     }
 
-    public void SetManualAwake(bool on)
+    /// <summary>
+    /// Mantener activa for <paramref name="minutes"/> (it lasts that long even if the agents finish earlier), or
+    /// with no time limit (null): until it's turned off or the agents that work meanwhile finish.
+    /// </summary>
+    public void StartKeepActive(int? minutes)
     {
-        ManualAwake = on;
-        Log.Info($"Modo manual: {(on ? "activado" : "desactivado")}");
+        KeepActive = true;
+        KeepActiveMinutes = minutes;
+        KeepActiveUntilUtc = minutes is { } m ? DateTime.UtcNow.AddMinutes(m) : null;
+        _keepActiveSawWork = false;
+        RuntimeStateStore.Update(s => s.KeepActiveUntilUtc = KeepActiveUntilUtc);
+        Log.Info(KeepActiveUntilUtc is { } until
+            ? $"Mantener activa: {minutes} min, hasta las {until.ToLocalTime():HH:mm}"
+            : "Mantener activa: sin límite de tiempo (hasta que terminen los agentes)");
         Refresh();
     }
 
-    public void SetTimer(int minutes)
+    public void StopKeepActive()
     {
-        TimerDeadlineUtc = DateTime.UtcNow.AddMinutes(minutes);
-        TimerMinutes = minutes;
-        _timerWarned = minutes <= 5;
-        if (Pending?.Source == ActionSource.Timer) Pending = null;
-        RuntimeStateStore.Update(s => s.TimerDeadlineUtc = TimerDeadlineUtc);
-        Log.Info($"Límite de tiempo: {minutes} min ({ActionName(Settings.TimerAction)} a las {TimerDeadlineUtc.Value.ToLocalTime():HH:mm})");
+        StopKeepActiveCore("desde VibeDoze");
         Refresh();
     }
 
-    public void ClearTimer()
+    private void StopKeepActiveCore(string why)
     {
-        ClearTimerCore();
-        Refresh();
-    }
-
-    private void ClearTimerCore()
-    {
-        if (TimerDeadlineUtc is null) return;
-        TimerDeadlineUtc = null;
-        TimerMinutes = null;
-        if (Pending?.Source == ActionSource.Timer) Pending = null;
-        RuntimeStateStore.Update(s => s.TimerDeadlineUtc = null);
-        Log.Info("Límite de tiempo cancelado");
+        if (!KeepActive) return;
+        if (KeepActiveUntilUtc is not null) RuntimeStateStore.Update(s => s.KeepActiveUntilUtc = null);
+        KeepActive = false;
+        KeepActiveUntilUtc = null;
+        KeepActiveMinutes = null;
+        Log.Info($"Mantener activa: desactivada ({why})");
     }
 
     /// <summary>User pressed "Cancel" on the countdown.</summary>
@@ -282,20 +293,13 @@ internal sealed class Engine : IDisposable
     {
         if (Pending is not { } p) return;
         Pending = null;
-        switch (p.Source)
+        if (p.Source == ActionSource.Thermal)
         {
-            case ActionSource.Timer:
-                ClearTimerCore();
-                break;
-            case ActionSource.Thermal:
-                _thermalSnoozeUntilUtc = DateTime.UtcNow.AddMinutes(15);
-                Log.Warn("Protección térmica pospuesta 15 min por el usuario (o hasta que cierre la tapa)");
-                break;
+            _thermalSnoozeUntilUtc = DateTime.UtcNow.AddMinutes(15);
+            Log.Warn("Protección térmica pospuesta 15 min por el usuario (o hasta que cierre la tapa)");
         }
         Refresh();
     }
-
-    public void PostponeTimer(int minutes) => SetTimer(minutes);
 
     public void ExecutePendingNow()
     {
@@ -358,7 +362,8 @@ internal sealed class Engine : IDisposable
             _tick++;
 
             ReadBattery();
-            _tracker.Evaluate(now, Settings, _hookKinds, Native.LastInputUtc());
+            _activity.Tick(now, PressKeys);
+            _tracker.Evaluate(now, Settings, _hookKinds, _activity.UserInputUtc);
             Evaluate(now);
             UpdateSlash(now);
         }
@@ -443,8 +448,14 @@ internal sealed class Engine : IDisposable
         if (!Settings.SlashWhileLidClosed || !LidClosed || !_power.LidOverrideActive || HoldReason is not null) return SlashPattern.Off;
         var busy = _tracker.Processes.Where(a => a.Busy && IsWatched(a.Kind)).ToList();
         if (busy.Any(a => a.Working)) return SlashPattern.Working;
-        return busy.Any(a => a.Waiting) ? SlashPattern.Waiting : SlashPattern.Resting; // finished (grace) or manual mode
+        return busy.Any(a => a.Waiting) ? SlashPattern.Waiting : SlashPattern.Resting; // finished (grace) or Mantener activa
     }
+
+    /// <summary>
+    /// F15 while Mantener activa keeps the laptop awake, the lid closed too (Teams stays available): never on hold
+    /// or once a sleep has started, so it can't wake the screen back up.
+    /// </summary>
+    private bool PressKeys => KeepActive && _power.KeepingAwake && HoldReason is null;
 
     private void ReadBattery()
     {
@@ -484,8 +495,9 @@ internal sealed class Engine : IDisposable
         }
 
         var busy = _tracker.Processes.Where(a => a.Busy && IsWatched(a.Kind)).ToList();
+        UpdateKeepActive(now, busy);
         bool sessionEnding = now < _sessionEndingUntilUtc;
-        bool want = Settings.Enabled && HoldReason is null && !sessionEnding && (ManualAwake || busy.Count > 0);
+        bool want = Settings.Enabled && HoldReason is null && !sessionEnding && (KeepActive || busy.Count > 0);
 
         // 2) Battery guard.
         if (_batteryHold && (!OnBattery || BatteryPercent is null || BatteryPercent > Settings.BatteryMinPercent + 5))
@@ -499,8 +511,14 @@ internal sealed class Engine : IDisposable
         if (_batteryHold) want = false;
 
         // 3) Keep awake ("sleep after: never" too, it replaces an armed sleep) + lid override.
-        if (want) _sleepAttemptUtc = null; // agents are busy again: never escalate an old sleep request
-        _power.SetKeepAwake(want, want && Settings.KeepDisplayOn && !LidClosed, PowerReason(busy));
+        if (want)
+        {
+            _sleepAttemptUtc = null; // agents are busy again: never escalate an old sleep request
+            _awakeForKeepActive = busy.Count == 0;
+        }
+        // Mantener activa keeps on any screen someone may be looking at: an external monitor with the lid closed too.
+        bool display = want && (KeepActive ? !Bagged : Settings.KeepDisplayOn && !LidClosed);
+        _power.SetKeepAwake(want, display, PowerReason(busy));
         if (powerPlans)
         {
             SyncIdleSleep(want);
@@ -515,7 +533,9 @@ internal sealed class Engine : IDisposable
                 // The lid is closed and nobody is using an external screen: do what closing the lid would have done.
                 if (Bagged && Pending is null && HoldReason is null && !sessionEnding)
                 {
-                    string why = _batteryHold ? "Batería baja con la tapa cerrada" : "Los agentes terminaron con la tapa cerrada";
+                    string why = _batteryHold ? "Batería baja con la tapa cerrada"
+                        : _awakeForKeepActive ? "Terminó Mantener activa con la tapa cerrada"
+                        : "Los agentes terminaron con la tapa cerrada";
                     StartAction(Settings.LidClosedDoneAction, _batteryHold ? ActionSource.Battery : ActionSource.Finished, why, now);
                     UpdateHeadline(busy);
                     return;
@@ -523,20 +543,7 @@ internal sealed class Engine : IDisposable
             }
         }
 
-        // 4) Shutdown timer.
-        if (TimerDeadlineUtc is { } deadline)
-        {
-            var left = deadline - now;
-            if (!_timerWarned && left <= TimeSpan.FromMinutes(5) && left > TimerCountdown)
-            {
-                _timerWarned = true;
-                RaiseNotify("Límite de tiempo", $"En 5 minutos: {ActionName(Settings.TimerAction).ToLowerInvariant()}.");
-            }
-            if (left <= TimerCountdown && Pending is null)
-                StartAction(Settings.TimerAction, ActionSource.Timer, "Se alcanzó el límite de tiempo", deadline);
-        }
-
-        // 5) Thermal guard: while we keep it awake, or whenever the lid is closed (bag!). It acts on the first
+        // 4) Thermal guard: while we keep it awake, or whenever the lid is closed (bag!). It acts on the first
         //    reading at or over the limit, no waiting. By default only on battery: plugged in, high temperatures
         //    are normal (charging, gaming).
         bool watched = want || LidClosed;
@@ -563,7 +570,7 @@ internal sealed class Engine : IDisposable
             Pending = null;
         }
 
-        // 6) A pending action the user hasn't seen (scheduled while nobody was looking): show it now,
+        // 5) A pending action the user hasn't seen (scheduled while nobody was looking): show it now,
         //    with at least 30 s left to react.
         if (Pending is { } unseen && Interactive && !ReferenceEquals(unseen, _shownPending) && ActionPending is not null)
         {
@@ -582,7 +589,7 @@ internal sealed class Engine : IDisposable
             ActionPending.Invoke(unseen);
         }
 
-        // 7) Sleep request that didn't take (lid closed, still running) → hibernate.
+        // 6) Sleep request that didn't take (lid closed, still running) → hibernate.
         if (_sleepAttemptUtc is { } attempt && !_suspendObserved)
         {
             var since = now - attempt;
@@ -601,6 +608,27 @@ internal sealed class Engine : IDisposable
         }
 
         UpdateHeadline(busy);
+    }
+
+    /// <summary>
+    /// Mantener activa with a time limit lasts exactly that. Without one it ends when the agents that worked
+    /// meanwhile are done (the grace included), so the laptop sleeps as it would without it.
+    /// </summary>
+    private void UpdateKeepActive(DateTime now, IReadOnlyList<AgentProcess> busy)
+    {
+        if (!KeepActive) return;
+        if (KeepActiveUntilUtc is { } until)
+        {
+            if (now >= until) StopKeepActiveCore("se acabó el tiempo");
+        }
+        else if (busy.Any(a => a.Working))
+        {
+            _keepActiveSawWork = true;
+        }
+        else if (_keepActiveSawWork && busy.Count == 0)
+        {
+            StopKeepActiveCore("los agentes terminaron");
+        }
     }
 
     /// <summary>Why the thermal guard can't act right now (null: it can).</summary>
@@ -661,10 +689,10 @@ internal sealed class Engine : IDisposable
     }
 
     /// <summary>Someone may be looking: a screen is on (laptop panel, or an external monitor with the lid closed).</summary>
-    private bool Interactive => DisplayOn;
+    private bool Interactive => DisplayOn && !(_displayWokenByKeyUtc is { } woke && _activity.UserInputUtc < woke);
 
     /// <summary>Lid closed and no screen on: the laptop is probably in a bag.</summary>
-    private bool Bagged => LidClosed && !DisplayOn;
+    private bool Bagged => LidClosed && !Interactive;
 
     private void StartAction(SystemAction action, ActionSource source, string reason, DateTime executeAtUtc)
     {
@@ -693,7 +721,6 @@ internal sealed class Engine : IDisposable
     private void Execute(PendingAction p)
     {
         Pending = null;
-        if (p.Source == ActionSource.Timer) ClearTimerCore();
         _actionExecutedUtc = DateTime.UtcNow;
         if (p.Source == ActionSource.Thermal) _thermalActedUtc = _actionExecutedUtc;
 
@@ -701,12 +728,12 @@ internal sealed class Engine : IDisposable
         HoldReason = p.Source switch
         {
             ActionSource.Thermal => $"{ActionName(p.Action)} por temperatura alta",
-            ActionSource.Timer => $"{ActionName(p.Action)} por límite de tiempo",
             ActionSource.Battery => $"{ActionName(p.Action)} por batería baja",
             ActionSource.Finished => $"{ActionName(p.Action)} al terminar (tapa cerrada)",
             _ => $"{ActionName(p.Action)} manual",
         };
         _heldByWindowsSleep = false;
+        StopKeepActiveCore(HoldReason.ToLowerInvariant()); // the laptop goes to sleep: no F15 waking it up again
 
         _power.SetKeepAwake(false, false, string.Empty);
         if (_power.LidOverrideActive) _power.RestoreLid();
@@ -776,8 +803,10 @@ internal sealed class Engine : IDisposable
         else if (_power.KeepingAwake)
         {
             Mode = EngineMode.Awake;
-            Headline = LidClosed ? "Trabajando con la tapa cerrada" : "Manteniendo despierta";
-            Detail = busy.Count == 0 ? "Modo manual activado" : DescribeBusy(busy);
+            Headline = LidClosed ? "Trabajando con la tapa cerrada" : busy.Count == 0 ? "Manteniendo activa" : "Manteniendo despierta";
+            Detail = busy.Count > 0 ? DescribeBusy(busy)
+                : KeepActiveUntilUtc is { } until ? $"Pantalla y Teams activos hasta las {until.ToLocalTime():HH:mm}"
+                : "Pantalla y Teams activos, sin límite de tiempo";
         }
         else
         {
@@ -803,7 +832,7 @@ internal sealed class Engine : IDisposable
 
     private string PowerReason(IReadOnlyList<AgentProcess> busy)
     {
-        if (busy.Count == 0) return "VibeDoze: modo manual";
+        if (busy.Count == 0) return "VibeDoze: mantener activa";
         var kinds = busy.Select(a => AgentRules.DisplayName(a.Kind)).Distinct();
         return $"VibeDoze: {string.Join(" y ", kinds)} trabajando";
     }
@@ -930,6 +959,7 @@ internal sealed class Engine : IDisposable
         {
             // The user is back: no pending escalation, no shortened idle timeout, no hold.
             _sleepAttemptUtc = null;
+            _displayWokenByKeyUtc = null;
             _slash.Reassert();
             if (PowerController.IdleSleepArmed) PowerController.RestoreIdleFromState();
             if (HoldReason is not null)
@@ -945,6 +975,10 @@ internal sealed class Engine : IDisposable
     {
         if (DisplayOn == on) return;
         DisplayOn = on;
+        // Our F15 may light a screen with the lid closed (in a bag, a monitor that was off): nobody is looking until
+        // they type or move the mouse, so the bag logic still holds.
+        _displayWokenByKeyUtc = on && LidClosed && DateTime.UtcNow - _activity.PressedUtc < TimeSpan.FromSeconds(5) ? DateTime.UtcNow : null;
+        if (_displayWokenByKeyUtc is not null) Log.Info("Pantalla encendida por F15 con la tapa cerrada: no cuenta como alguien mirando");
         _displayOnSinceUtc = on ? DateTime.UtcNow : null;
         if (!on && LidClosed) EndThermalSnooze("tapa cerrada y pantalla apagada");
         if (on && !LidClosed)
@@ -977,6 +1011,7 @@ internal sealed class Engine : IDisposable
     private void OnSuspend()
     {
         _slashPreviewStartUtc = null;
+        StopKeepActiveCore("Windows se suspende");
         if (!Settings.Enabled || HoldReason is not null) return; // paused, or a sleep of ours
         var now = DateTime.UtcNow;
         HoldReason = "Suspendida desde Windows";
@@ -996,13 +1031,8 @@ internal sealed class Engine : IDisposable
         _suspendObserved = true;
         _sleepAttemptUtc = null;
         _wokeUtc = DateTime.UtcNow;
-        if (Pending is not null && Pending.Source != ActionSource.Timer) Pending = null;
-        if (TimerDeadlineUtc is { } d && d <= DateTime.UtcNow)
-        {
-            Log.Info("El límite de tiempo venció mientras dormía; se cancela");
-            ClearTimerCore();
-            Pending = null;
-        }
+        Pending = null;
+        StopKeepActiveCore("la laptop durmió"); // in case the suspend itself went unnoticed
         // Modern Standby says "by the user" on wakes nobody asked for too: after a sleep of Windows', wait for the screen.
         if (byUser && !LidClosed && !_heldByWindowsSleep) HoldReason = null;
         Refresh();

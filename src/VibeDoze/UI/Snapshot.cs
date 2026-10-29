@@ -46,10 +46,10 @@ internal static class Snapshot
         var pending = new PendingAction
         {
             Action = SystemAction.Sleep,
-            Source = ActionSource.Timer,
-            Reason = "Se alcanzó el límite de tiempo",
-            ExecuteAtUtc = now.AddSeconds(27),
-            CreatedUtc = now.AddSeconds(-33),
+            Source = ActionSource.Thermal,
+            Reason = "Temperatura alta: 82 °C",
+            ExecuteAtUtc = now.AddSeconds(18),
+            CreatedUtc = now.AddSeconds(-12),
         };
         var countdown = new CountdownWindow(engine, pending, preview: true);
         Save((FrameworkElement)countdown.Content, 512, null, null, Path.Combine(dir, $"countdown-{theme}.png"));

@@ -36,9 +36,6 @@ public partial class CountdownWindow : Window
         };
         Reason.Text = pending.Reason;
         NowButton.Content = $"{Engine.ActionName(pending.Action)} ahora";
-        bool timer = pending.Source == ActionSource.Timer;
-        PostponeButton.Visibility = timer ? Visibility.Visible : Visibility.Collapsed;
-        CancelButton.Margin = timer ? new Thickness(4, 0, 4, 0) : new Thickness(0, 0, 4, 0);
         CancelButton.Content = thermal ? "Ignorar 15 min" : "Cancelar";
 
         if (!preview)
@@ -74,8 +71,6 @@ public partial class CountdownWindow : Window
         geometry.Freeze();
         return geometry;
     }
-
-    private void OnPostpone(object sender, RoutedEventArgs e) => _engine.PostponeTimer(15);
 
     private void OnCancel(object sender, RoutedEventArgs e) => _engine.CancelPending();
 

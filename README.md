@@ -1,6 +1,6 @@
 # VibeDoze
 
-App de bandeja para Windows que **mantiene tu laptop despierta mientras Claude Code o Codex están trabajando**, aunque cierres la tapa, y la duerme sola cuando terminan. Incluye un límite de tiempo y protección térmica y de batería, para que no se recaliente dentro de una funda.
+App de bandeja para Windows que **mantiene tu laptop despierta mientras Claude Code o Codex están trabajando**, aunque cierres la tapa, y la duerme sola cuando terminan. Incluye *Mantener activa*, que deja la pantalla encendida y tu estado de Teams en Disponible como Caffeine, y protección térmica y de batería, para que no se recaliente dentro de una funda.
 
 Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains y con cualquier terminal (CLI de `claude` o `codex`), y también con agentes instalados en un servidor al que entras por SSH, como una instancia EC2.
 
@@ -18,11 +18,10 @@ Funciona con la extensión de VS Code, Cursor, Windsurf, Antigravity, JetBrains 
 | **Tapa abierta** | Mientras un agente trabaja, la pantalla se apaga según tu configuración, pero la laptop no se suspende. Si prefieres que la pantalla siga encendida, activa *Ajustes → Tapa y energía → Mantener la pantalla encendida*. |
 | **Tapa cerrada** | Mientras un agente trabaja, cerrar la tapa no suspende la laptop. Cuando termina (más un margen configurable), la laptop se suspende sola. Si la suspendes tú (botón de encendido o *Inicio → Suspender*), se suspende igual aunque un agente esté trabajando: VibeDoze no la mantiene despierta y la luz Slash queda apagada hasta que vuelvas a usarla. |
 | **Luz Slash** | En las laptops ROG con barra Slash en la tapa (Zephyrus G14 y G16 desde 2024; en otras laptops no aparece ni toca nada), la barra es una luz de estado: apagada mientras usas la laptop y, con la tapa cerrada, una luz que la recorre mientras un agente trabaja, doble parpadeo si necesita tu respuesta y respiración lenta al terminar. Funciona también con batería. Se prueba en *Ajustes → Tapa y energía → Probar*. Si prefieres tu animación de Armoury Crate con la tapa abierta, desactiva *Apagada mientras usas la laptop*; al salir de VibeDoze también vuelve. |
-| **Límite de tiempo** | 15 min, 30 min, 1 h, 2 h, 4 h, 8 h o un valor personalizado. Al llegar: suspender, hibernar o apagar. Si estás frente a la pantalla, aparece una cuenta regresiva de 60 s con *Posponer 15 min* y *Cancelar*. |
+| **Mantener activa** | Como Caffeine: tras un minuto sin teclado ni mouse pulsa F15, una tecla que ninguna app usa, así la pantalla no se apaga ni se bloquea y Teams, Slack y similares te muestran Disponible. Mientras está activa, cerrar la tapa no suspende la laptop. Elige cuánto dura (15 min, 30 min, 1 h, 2 h, 4 h, 8 h o un valor personalizado): ese tiempo se cumple aunque Claude termine antes. *Sin límite* se desactiva cuando Claude termina. Al desactivarse, la laptop vuelve a suspenderse como siempre (con la tapa cerrada, al momento). Si la laptop se suspende antes, también se desactiva. Con la tapa cerrada también pulsa F15, así Teams te sigue mostrando Disponible, y si usas un monitor externo lo mantiene encendido. |
 | **Protección térmica** | Lee los sensores térmicos ACPI de Windows (sin admin). Apenas la temperatura llega al límite o lo supera (80 °C por defecto), suspende o hiberna, sin esperar. Si con la tapa cerrada la suspensión no entra en 75 s, hiberna. Con la tapa abierta avisa 30 s antes; si eliges *Ignorar*, la protección queda en pausa 15 min o hasta que cierres la tapa, lo que ocurra primero. Mientras hay agentes trabajando o la tapa está cerrada, el registro anota la temperatura cada minuto. Por defecto **solo actúa con batería**: enchufada es normal que se caliente (cargando, jugando con agentes corriendo). Se puede cambiar con "Solo con batería". |
 | **Batería baja** | Por debajo del porcentaje elegido deja de mantenerla despierta y, si la tapa está cerrada, la suspende. |
 | **Agentes por SSH** | Claude Code o Codex instalados en un servidor (una instancia EC2, por ejemplo) al que entras por SSH desde la laptop: sus hooks llegan por el mismo túnel SSH. Ver [Agentes en un servidor por SSH](#agentes-en-un-servidor-por-ssh). |
-| **Modo manual** | "Mantener despierta ahora", para cuando no hay agentes. |
 
 ## Descargar
 
@@ -69,9 +68,9 @@ Windows 11 oculta los iconos nuevos de la bandeja. Para fijar el de VibeDoze ve 
 
 ## Uso
 
-- **Clic izquierdo** en el icono abre el panel: estado, sesiones, límite de tiempo y protecciones. Sigue el tema claro u oscuro de Windows.
-- **Clic derecho** abre los accesos rápidos: activar o pausar, Claude Code, Codex, tapa cerrada, límite de tiempo, protección térmica, suspender ahora y salir.
-- **Ajustes** (en el pie del panel o en el menú) abre la ventana con todas las opciones, agrupadas en General, Agentes, Tapa y energía, Límite de tiempo, Protección y Actualizaciones.
+- **Clic izquierdo** en el icono abre el panel: estado, sesiones, *Mantener activa* y protecciones. Sigue el tema claro u oscuro de Windows.
+- **Clic derecho** abre los accesos rápidos: activar o pausar, Claude Code, Codex, tapa cerrada, *Mantener activa*, protección térmica, suspender ahora y salir.
+- **Ajustes** (en el pie del panel o en el menú) abre la ventana con todas las opciones, agrupadas en General, Agentes, Tapa y energía, Mantener activa, Protección y Actualizaciones.
 
 <p align="center">
   <img src="docs/settings-agents-light.png" width="640" alt="Ajustes: agentes y hooks">
@@ -89,7 +88,7 @@ El icono de la bandeja es una taza de café monocroma que combina con la barra d
 | Taza con vapor y punto rojo | Alerta térmica |
 | Taza atenuada | En pausa |
 
-Cuando se cumple el límite de tiempo con la pantalla encendida, aparece una cuenta regresiva de 60 s:
+Si la temperatura llega al límite con la pantalla encendida, aparece una cuenta regresiva de 30 s:
 
 <p align="center"><img src="docs/countdown-light.png" width="300" alt="Cuenta regresiva"></p>
 
@@ -220,7 +219,7 @@ Si usaste el `.exe` descargado, ejecuta `VibeDoze.exe uninstall-hooks` (o pulsa 
 
 ```text
 src/VibeDoze/           App WPF (.NET 10, autocontenida)
-  Core/Engine.cs          lógica principal: despierta, tapa, temporizador, térmica, batería
+  Core/Engine.cs          lógica principal: despierta, tapa, mantener activa, térmica, batería
   Core/PowerController.cs solicitudes de energía, acción de la tapa, suspender/hibernar
   Core/AgentScanner.cs    detección de agentes por procesos y CPU
   Core/AgentTracker.cs    estado por sesión (hooks + CPU)
