@@ -14,7 +14,7 @@
     <ApplicationIcon>Assets\VibeDoze.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>VibeDoze.Program</StartupObject>
-    <Version>1.6.0</Version>
+    <Version>1.6.1</Version>
     <Product>VibeDoze</Product>
     <Description>Mantiene tu laptop despierta mientras Claude Code o Codex trabajan.</Description>
     <Copyright>© 2026 VibeDoze</Copyright>

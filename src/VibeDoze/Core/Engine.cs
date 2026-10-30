@@ -43,7 +43,10 @@ internal sealed class Engine : IDisposable
     private static readonly TimeSpan ThermalLogInterval = TimeSpan.FromMinutes(1);
     /// <summary>Lid closed, sleep requested, still running after this long → hibernate (idle standby takes ~1 min).</summary>
     private static readonly TimeSpan SleepEscalation = TimeSpan.FromSeconds(150);
-    /// <summary>The same for a sleep caused by heat: it can't wait as long.</summary>
+    /// <summary>
+    /// The same for a sleep caused by heat: it can't wait as long. Also how long the thermal guard waits for a sleep
+    /// Windows announced to take before acting.
+    /// </summary>
     private static readonly TimeSpan ThermalSleepEscalation = TimeSpan.FromSeconds(75);
     /// <summary>Still hot this long after a thermal action (it didn't take) → act again.</summary>
     private static readonly TimeSpan ThermalRetry = TimeSpan.FromMinutes(2);
@@ -80,6 +83,11 @@ internal sealed class Engine : IDisposable
     private long _tick;
     private DateTime _lastTickUtc = DateTime.MinValue;
     private DateTime _wokeUtc = DateTime.MinValue;
+    /// <summary>
+    /// Windows announced a sleep. A sleeping laptop cools down: a reading taken while it gets there (the sensor jumps
+    /// fast) must not turn that sleep into a thermal hibernation.
+    /// </summary>
+    private DateTime _suspendingUtc = DateTime.MinValue;
     private DateTime _thermalActedUtc = DateTime.MinValue;
     private TimeSpan _sleepEscalation = SleepEscalation;
     private DateTime _thermalSnoozeUntilUtc = DateTime.MinValue;
@@ -639,6 +647,7 @@ internal sealed class Engine : IDisposable
         : now < _thermalSnoozeUntilUtc ? $"pospuesta hasta las {_thermalSnoozeUntilUtc.ToLocalTime():HH:mm}"
         : !OnBattery && Settings.ThermalOnlyOnBattery ? "enchufada"
         : now - _wokeUtc < ResumeSettle ? "acaba de despertar"
+        : now - _suspendingUtc < ThermalSleepEscalation ? "Windows está suspendiendo"
         : null;
 
     /// <summary>
@@ -925,6 +934,7 @@ internal sealed class Engine : IDisposable
                 case Native.PBT_APMSUSPEND:
                     _suspendObserved = true;
                     _sleepAttemptUtc = null;
+                    _suspendingUtc = DateTime.UtcNow; // before OnSuspend: its Evaluate must already see it
                     Log.Info("Sistema entrando en suspensión");
                     _slash.Release(TimeSpan.FromMilliseconds(500), keepDark: true);
                     OnSuspend();
@@ -1031,6 +1041,7 @@ internal sealed class Engine : IDisposable
         _suspendObserved = true;
         _sleepAttemptUtc = null;
         _wokeUtc = DateTime.UtcNow;
+        _suspendingUtc = DateTime.MinValue; // awake again: hot and running counts once the resume has settled
         Pending = null;
         StopKeepActiveCore("la laptop durmió"); // in case the suspend itself went unnoticed
         // Modern Standby says "by the user" on wakes nobody asked for too: after a sleep of Windows', wait for the screen.
